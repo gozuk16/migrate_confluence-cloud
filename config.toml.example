@@ -1,0 +1,28 @@
+[confluence]
+# Confluence Cloud のURL（例: https://your-domain.atlassian.net）
+url = "https://your-domain.atlassian.net"
+# Confluenceユーザーのメールアドレス
+email = "your-email@example.com"
+# Confluence APIトークン（https://id.atlassian.com/manage-profile/security/api-tokens で生成）
+api_token = "your-api-token"
+
+[output]
+# Markdown出力ディレクトリ（デフォルト: output/markdown）
+markdown_dir = "output/markdown"
+# 添付ファイル保存ディレクトリ（空の場合はmarkdown_dir内のページディレクトリに配置）
+attachments_dir = ""
+# XHTML中間ファイル保存ディレクトリ（デフォルト: output/xhtml）
+xhtml_dir = "output/xhtml"
+
+[search]
+# デフォルトのスペースキー（spaceコマンドでスペースキーを省略した場合に使用）
+default_space_key = ""
+
+[display]
+# 変換時に無視するConfluenceマクロ名のリスト
+ignored_macros = []
+
+# 削除済みユーザーのマッピング（accountId -> 表示名）
+# 例:
+# [deletedUsers]
+# "123456:abcdef" = "山田 太郎"
