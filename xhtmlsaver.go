@@ -11,19 +11,19 @@ import (
 
 // PageMetadata はページのメタデータを表す構造体（TOML保存用）
 type PageMetadata struct {
-	ID         string   `toml:"id"`
-	Title      string   `toml:"title"`
-	Status     string   `toml:"status"`
-	SpaceID    string   `toml:"space_id"`
-	SpaceKey   string   `toml:"space_key"`
-	ParentID   string   `toml:"parent_id"`
-	ParentTitle string  `toml:"parent_title"`
-	CreatedAt  string   `toml:"created_at"`
-	UpdatedAt  string   `toml:"updated_at"`
-	AuthorID   string   `toml:"author_id"`
-	Version    int      `toml:"version"`
-	Labels     []string `toml:"labels"`
-	WebURL     string   `toml:"web_url"`
+	ID          string   `toml:"id"`
+	Title       string   `toml:"title"`
+	Status      string   `toml:"status"`
+	SpaceID     string   `toml:"space_id"`
+	SpaceKey    string   `toml:"space_key"`
+	ParentID    string   `toml:"parent_id"`
+	ParentTitle string   `toml:"parent_title"`
+	CreatedAt   string   `toml:"created_at"`
+	UpdatedAt   string   `toml:"updated_at"`
+	AuthorID    string   `toml:"author_id"`
+	Version     int      `toml:"version"`
+	Labels      []string `toml:"labels"`
+	WebURL      string   `toml:"web_url"`
 }
 
 // CommentMetadata はコメントのメタデータ

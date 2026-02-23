@@ -80,23 +80,23 @@ type Space struct {
 
 // Attachment はConfluenceの添付ファイル情報
 type Attachment struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Status      string `json:"status"`
-	FileSize    int64  `json:"fileSize"`
-	MediaType   string `json:"mediaType"`
-	PageID      string `json:"pageId"`
-	Version     Version `json:"version"`
-	Links       Links  `json:"_links"`
+	ID        string  `json:"id"`
+	Title     string  `json:"title"`
+	Status    string  `json:"status"`
+	FileSize  int64   `json:"fileSize"`
+	MediaType string  `json:"mediaType"`
+	PageID    string  `json:"pageId"`
+	Version   Version `json:"version"`
+	Links     Links   `json:"_links"`
 }
 
 // Comment はConfluenceのコメント情報
 type Comment struct {
-	ID       string      `json:"id"`
-	Status   string      `json:"status"`
-	Body     CommentBody `json:"body"`
-	Version  Version     `json:"version"`
-	PageID   string      `json:"pageId"`
+	ID      string      `json:"id"`
+	Status  string      `json:"status"`
+	Body    CommentBody `json:"body"`
+	Version Version     `json:"version"`
+	PageID  string      `json:"pageId"`
 }
 
 // CommentBody はコメントのボディコンテンツ

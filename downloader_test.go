@@ -96,10 +96,10 @@ func TestDownloadAttachments(t *testing.T) {
 
 	attachments := []Attachment{
 		{
-			ID:       "attach1",
-			Title:    "test-image.png",
-			PageID:   "12345",
-			Links:    Links{Download: server.URL + "/download/test-image.png"},
+			ID:     "attach1",
+			Title:  "test-image.png",
+			PageID: "12345",
+			Links:  Links{Download: server.URL + "/download/test-image.png"},
 		},
 	}
 

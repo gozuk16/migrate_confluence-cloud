@@ -73,7 +73,8 @@ func main() {
 					},
 					&cli.BoolFlag{
 						Name:  "save-xhtml",
-						Usage: "XHTML中間ファイルを保存する",
+						Value: true,
+						Usage: "XHTML中間ファイルを保存する（デフォルト: true）",
 					},
 					&cli.BoolFlag{
 						Name:  "download-attachments",
@@ -94,7 +95,8 @@ func main() {
 					},
 					&cli.BoolFlag{
 						Name:  "save-xhtml",
-						Usage: "XHTML中間ファイルを保存する",
+						Value: true,
+						Usage: "XHTML中間ファイルを保存する（デフォルト: true）",
 					},
 					&cli.BoolFlag{
 						Name:  "download-attachments",

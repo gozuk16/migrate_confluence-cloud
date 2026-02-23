@@ -6,11 +6,11 @@ build:
 
 # 実行（サンプル: 単一ページ取得）
 run-page:
-	LOG_LEVEL=DEBUG go run . page --page-id 123456 -c config.toml
+	LOG_LEVEL=DEBUG go run . page --page-id 5931010 -c config.toml
 
 # 実行（サンプル: スペース全ページ取得）
 run-space:
-	LOG_LEVEL=DEBUG go run . space --space-key MYSPACE -c config.toml
+	LOG_LEVEL=DEBUG go run . space --space-key SCRUM -c config.toml
 
 # テスト
 test:

@@ -173,10 +173,10 @@ func TestXHTMLSaver_ListPages(t *testing.T) {
 	// 複数ページを保存
 	pages := []*Page{
 		{ID: "1", Title: "ページA", Status: "current", SpaceID: "TEST",
-			Body: PageBody{Storage: Storage{Value: "<p>A</p>"}},
+			Body:    PageBody{Storage: Storage{Value: "<p>A</p>"}},
 			Version: Version{Number: 1}},
 		{ID: "2", Title: "ページB", Status: "current", SpaceID: "TEST",
-			Body: PageBody{Storage: Storage{Value: "<p>B</p>"}},
+			Body:    PageBody{Storage: Storage{Value: "<p>B</p>"}},
 			Version: Version{Number: 1}},
 	}
 
