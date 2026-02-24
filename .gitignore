@@ -31,7 +31,14 @@ go.work.sum
 config.toml
 output/
 migConfluence
+migrate_confluence-cloud
 debug.log
+
+# Claude Code
+.claude/
+
+# Documentation build artifacts
+docs/
 
 # Editor/IDE
 # .idea/
