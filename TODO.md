@@ -19,3 +19,4 @@
 - [x] Step 7: Markdownファイル出力（mdwriter.go）
 - [x] Step 8: CLIエントリーポイント（main.go）
 - [x] Step 9: README.md作成
+- [x] Step 10: 変換品質改善（GFM Alerts, タスクリスト, 追加マクロ対応, 未対応要素レポート）
