@@ -56,10 +56,9 @@ func (s *IntermediateSaver) SavePage(page *Page, spaceKey string, labels []Label
 		return fmt.Errorf("ディレクトリ作成エラー: %w", err)
 	}
 
-	// XHTML本文の保存
 	xhtmlPath := filepath.Join(dir, "content.xhtml")
 	if err := os.WriteFile(xhtmlPath, []byte(page.Body.Storage.Value), 0644); err != nil {
-		return fmt.Errorf("XHTMLファイル保存エラー: %w", err)
+		return fmt.Errorf("中間ファイル保存エラー: %w", err)
 	}
 
 	// ラベル名の抽出
@@ -98,7 +97,7 @@ func (s *IntermediateSaver) SavePage(page *Page, spaceKey string, labels []Label
 	return nil
 }
 
-// SaveComments はコメントのXHTMLをファイルに保存する
+// SaveComments はコメントの中間ファイルを保存する
 func (s *IntermediateSaver) SaveComments(pageTitle, spaceKey string, comments []Comment) error {
 	if len(comments) == 0 {
 		return nil
@@ -112,7 +111,7 @@ func (s *IntermediateSaver) SaveComments(pageTitle, spaceKey string, comments []
 	for i, comment := range comments {
 		xhtmlPath := filepath.Join(commentsDir, fmt.Sprintf("comment_%03d.xhtml", i+1))
 		if err := os.WriteFile(xhtmlPath, []byte(comment.Body.Storage.Value), 0644); err != nil {
-			return fmt.Errorf("コメントXHTMLファイル保存エラー (ID: %s): %w", comment.ID, err)
+			return fmt.Errorf("コメント中間ファイル保存エラー (ID: %s): %w", comment.ID, err)
 		}
 
 		meta := CommentMetadata{
@@ -135,14 +134,14 @@ func (s *IntermediateSaver) SaveComments(pageTitle, spaceKey string, comments []
 	return nil
 }
 
-// LoadPage はXHTMLとメタデータファイルからページを読み込む
+// LoadPage は中間ファイルとメタデータファイルからページを読み込む
 func (s *IntermediateSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label, error) {
 	dir := s.pageDir(spaceKey, pageTitle)
 
 	xhtmlPath := filepath.Join(dir, "content.xhtml")
 	xhtmlData, err := os.ReadFile(xhtmlPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("XHTMLファイル読み込みエラー: %w", err)
+		return nil, nil, fmt.Errorf("中間ファイル読み込みエラー: %w", err)
 	}
 
 	metaPath := filepath.Join(dir, "metadata.toml")
