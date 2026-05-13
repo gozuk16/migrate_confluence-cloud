@@ -184,6 +184,9 @@ api_token = "test-token-123"
 				if config.Output.IntermediateDir != "output/intermediate" {
 					t.Errorf("IntermediateDirのデフォルト値が期待と異なります: %q", config.Output.IntermediateDir)
 				}
+				if config.Output.HTMLDir != "output/html" {
+					t.Errorf("HTMLDirのデフォルト値が期待と異なります: %q", config.Output.HTMLDir)
+				}
 			}
 		})
 	}
@@ -289,6 +292,9 @@ func TestValidate(t *testing.T) {
 				}
 				if tt.config.Output.IntermediateDir != "output/intermediate" {
 					t.Errorf("IntermediateDirのデフォルト値が期待と異なります: %q", tt.config.Output.IntermediateDir)
+				}
+				if tt.config.Output.HTMLDir != "output/html" {
+					t.Errorf("HTMLDirのデフォルト値が期待と異なります: %q", tt.config.Output.HTMLDir)
 				}
 			}
 		})
