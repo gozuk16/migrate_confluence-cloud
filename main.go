@@ -72,9 +72,9 @@ func main() {
 						Usage:   "子ページも再帰的に取得する",
 					},
 					&cli.BoolFlag{
-						Name:  "save-xhtml",
+						Name:  "save-intermediate",
 						Value: true,
-						Usage: "XHTML中間ファイルを保存する（デフォルト: true）",
+						Usage: "中間ファイル（Confluence Storage Format）を保存する（デフォルト: true）",
 					},
 					&cli.BoolFlag{
 						Name:  "download-attachments",
@@ -94,9 +94,9 @@ func main() {
 						Usage:   "スペースキー（省略時は設定ファイルのdefault_space_keyを使用）",
 					},
 					&cli.BoolFlag{
-						Name:  "save-xhtml",
+						Name:  "save-intermediate",
 						Value: true,
-						Usage: "XHTML中間ファイルを保存する（デフォルト: true）",
+						Usage: "中間ファイル（Confluence Storage Format）を保存する（デフォルト: true）",
 					},
 					&cli.BoolFlag{
 						Name:  "download-attachments",
@@ -108,7 +108,7 @@ func main() {
 			{
 				Name:    "convert",
 				Aliases: []string{"conv"},
-				Usage:   "保存済みXHTMLからMarkdownに変換する（APIアクセス不要）",
+				Usage:   "保存済み中間ファイルからMarkdownとHTMLに変換する（APIアクセス不要）",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "space-key",
@@ -116,7 +116,7 @@ func main() {
 						Usage:   "変換対象スペースキー（省略時は全スペース）",
 					},
 				},
-				Action: convertFromXHTML,
+				Action: convertFromIntermediate,
 			},
 		},
 	}
@@ -136,16 +136,16 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 
 	pageID := cmd.String("page-id")
 	recursive := cmd.Bool("recursive")
-	saveXHTML := cmd.Bool("save-xhtml")
+	saveIntermediate := cmd.Bool("save-intermediate")
 	downloadAttachments := cmd.Bool("download-attachments")
 
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
-	var xhtmlSaver *XHTMLSaver
-	if saveXHTML {
-		xhtmlSaver = NewXHTMLSaver(cfg.Output.IntermediateDir)
+	var intermediateSaver *IntermediateSaver
+	if saveIntermediate {
+		intermediateSaver = NewIntermediateSaver(cfg.Output.IntermediateDir)
 	}
 
 	var downloader *Downloader
@@ -153,7 +153,7 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 		downloader = NewDownloader(cfg.Confluence.Email, cfg.Confluence.APIToken)
 	}
 
-	if err := processPage(client, writer, xhtmlSaver, downloader, cfg, pageID, recursive); err != nil {
+	if err := processPage(client, writer, intermediateSaver, downloader, cfg, pageID, recursive); err != nil {
 		return err
 	}
 
@@ -167,7 +167,7 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 }
 
 // processPage は1ページとオプションで子ページを処理する
-func processPage(client *ConfluenceClient, writer *MDWriter, xhtmlSaver *XHTMLSaver, downloader *Downloader, cfg *Config, pageID string, recursive bool) error {
+func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *IntermediateSaver, downloader *Downloader, cfg *Config, pageID string, recursive bool) error {
 	slog.Info("ページ取得中", "pageID", pageID)
 
 	// ページ取得
@@ -213,14 +213,14 @@ func processPage(client *ConfluenceClient, writer *MDWriter, xhtmlSaver *XHTMLSa
 		}
 	}
 
-	// XHTML中間ファイルの保存
-	if xhtmlSaver != nil {
-		if err := xhtmlSaver.SavePage(page, space.Key, labels); err != nil {
-			slog.Warn("XHTML保存エラー", "pageID", pageID, "error", err)
+	// 中間ファイルの保存
+	if intermediateSaver != nil {
+		if err := intermediateSaver.SavePage(page, space.Key, labels); err != nil {
+			slog.Warn("中間ファイル保存エラー", "pageID", pageID, "error", err)
 		}
 		if len(comments) > 0 {
-			if err := xhtmlSaver.SaveComments(page.Title, space.Key, comments); err != nil {
-				slog.Warn("コメントXHTML保存エラー", "pageID", pageID, "error", err)
+			if err := intermediateSaver.SaveComments(page.Title, space.Key, comments); err != nil {
+				slog.Warn("コメント中間ファイル保存エラー", "pageID", pageID, "error", err)
 			}
 		}
 	}
@@ -251,7 +251,7 @@ func processPage(client *ConfluenceClient, writer *MDWriter, xhtmlSaver *XHTMLSa
 			return nil
 		}
 		for _, childPage := range childPages {
-			if err := processPage(client, writer, xhtmlSaver, downloader, cfg, childPage.ID, recursive); err != nil {
+			if err := processPage(client, writer, intermediateSaver, downloader, cfg, childPage.ID, recursive); err != nil {
 				slog.Warn("子ページ処理エラー", "pageID", childPage.ID, "error", err)
 			}
 		}
@@ -275,16 +275,16 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("スペースキーを指定してください（--space-key または設定ファイルのdefault_space_key）")
 	}
 
-	saveXHTML := cmd.Bool("save-xhtml")
+	saveIntermediate := cmd.Bool("save-intermediate")
 	downloadAttachments := cmd.Bool("download-attachments")
 
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
-	var xhtmlSaver *XHTMLSaver
-	if saveXHTML {
-		xhtmlSaver = NewXHTMLSaver(cfg.Output.IntermediateDir)
+	var intermediateSaver *IntermediateSaver
+	if saveIntermediate {
+		intermediateSaver = NewIntermediateSaver(cfg.Output.IntermediateDir)
 	}
 
 	var downloader *Downloader
@@ -311,7 +311,7 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	// 各ページを処理
 	for i, page := range pages {
 		fmt.Printf("[%d/%d] 処理中: %s (%s)\n", i+1, len(pages), page.Title, page.ID)
-		if err := processPage(client, writer, xhtmlSaver, downloader, cfg, page.ID, false); err != nil {
+		if err := processPage(client, writer, intermediateSaver, downloader, cfg, page.ID, false); err != nil {
 			slog.Warn("ページ処理エラー", "pageID", page.ID, "title", page.Title, "error", err)
 		}
 	}
@@ -327,8 +327,8 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// convertFromXHTML は保存済みXHTMLからMarkdownを生成するコマンドハンドラ
-func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
+// convertFromIntermediate は保存済み中間ファイルからMarkdownを生成するコマンドハンドラ
+func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 	cfg, err := LoadConfig(cmd.Root().String("config"))
 	if err != nil {
 		return fmt.Errorf("設定ファイルの読み込みに失敗しました: %w", err)
@@ -336,15 +336,15 @@ func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
 
 	spaceKeyFilter := cmd.String("space-key")
 
-	xhtmlSaver := NewXHTMLSaver(cfg.Output.IntermediateDir)
+	intermediateSaver := NewIntermediateSaver(cfg.Output.IntermediateDir)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
-	// XHTMLディレクトリを走査
-	xhtmlDir := cfg.Output.IntermediateDir
-	entries, err := os.ReadDir(xhtmlDir)
+	// 中間ファイルディレクトリを走査
+	intermediateDir := cfg.Output.IntermediateDir
+	entries, err := os.ReadDir(intermediateDir)
 	if err != nil {
-		return fmt.Errorf("XHTMLディレクトリの読み込みに失敗しました (%s): %w", xhtmlDir, err)
+		return fmt.Errorf("中間ファイルディレクトリの読み込みに失敗しました (%s): %w", intermediateDir, err)
 	}
 
 	totalConverted := 0
@@ -360,7 +360,7 @@ func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
 			continue
 		}
 
-		pages, err := xhtmlSaver.ListPages(spaceKey)
+		pages, err := intermediateSaver.ListPages(spaceKey)
 		if err != nil {
 			slog.Warn("ページ一覧取得エラー", "spaceKey", spaceKey, "error", err)
 			continue
@@ -371,13 +371,13 @@ func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
 		for i, pageTitle := range pages {
 			fmt.Printf("[%d/%d] 変換中: %s\n", i+1, len(pages), pageTitle)
 
-			page, labels, err := xhtmlSaver.LoadPage(spaceKey, pageTitle)
+			page, labels, err := intermediateSaver.LoadPage(spaceKey, pageTitle)
 			if err != nil {
 				slog.Warn("ページ読み込みエラー", "spaceKey", spaceKey, "pageTitle", pageTitle, "error", err)
 				continue
 			}
 
-			comments, err := xhtmlSaver.LoadComments(spaceKey, pageTitle)
+			comments, err := intermediateSaver.LoadComments(spaceKey, pageTitle)
 			if err != nil {
 				slog.Warn("コメント読み込みエラー", "error", err)
 				comments = []Comment{}

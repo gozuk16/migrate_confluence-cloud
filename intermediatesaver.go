@@ -33,24 +33,24 @@ type CommentMetadata struct {
 	AuthorID  string `toml:"author_id"`
 }
 
-// XHTMLSaver はXHTML中間ファイルの保存・読み込みを管理する
-type XHTMLSaver struct {
+// IntermediateSaver は中間ファイル（Confluence Storage Format）の保存・読み込みを管理する
+type IntermediateSaver struct {
 	baseDir string
 }
 
-// NewXHTMLSaver は新しいXHTMLSaverを作成する
-func NewXHTMLSaver(baseDir string) *XHTMLSaver {
-	return &XHTMLSaver{baseDir: baseDir}
+// NewIntermediateSaver は新しいIntermediateSaverを作成する
+func NewIntermediateSaver(baseDir string) *IntermediateSaver {
+	return &IntermediateSaver{baseDir: baseDir}
 }
 
 // pageDir はページのディレクトリパスを返す
-func (s *XHTMLSaver) pageDir(spaceKey, pageTitle string) string {
+func (s *IntermediateSaver) pageDir(spaceKey, pageTitle string) string {
 	safeTitle := sanitizeFilename(pageTitle)
 	return filepath.Join(s.baseDir, spaceKey, safeTitle)
 }
 
 // SavePage はページのXHTMLとメタデータをファイルに保存する
-func (s *XHTMLSaver) SavePage(page *Page, spaceKey string, labels []Label) error {
+func (s *IntermediateSaver) SavePage(page *Page, spaceKey string, labels []Label) error {
 	dir := s.pageDir(spaceKey, page.Title)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("ディレクトリ作成エラー: %w", err)
@@ -99,7 +99,7 @@ func (s *XHTMLSaver) SavePage(page *Page, spaceKey string, labels []Label) error
 }
 
 // SaveComments はコメントのXHTMLをファイルに保存する
-func (s *XHTMLSaver) SaveComments(pageTitle, spaceKey string, comments []Comment) error {
+func (s *IntermediateSaver) SaveComments(pageTitle, spaceKey string, comments []Comment) error {
 	if len(comments) == 0 {
 		return nil
 	}
@@ -110,13 +110,11 @@ func (s *XHTMLSaver) SaveComments(pageTitle, spaceKey string, comments []Comment
 	}
 
 	for i, comment := range comments {
-		// コメントXHTMLの保存
 		xhtmlPath := filepath.Join(commentsDir, fmt.Sprintf("comment_%03d.xhtml", i+1))
 		if err := os.WriteFile(xhtmlPath, []byte(comment.Body.Storage.Value), 0644); err != nil {
 			return fmt.Errorf("コメントXHTMLファイル保存エラー (ID: %s): %w", comment.ID, err)
 		}
 
-		// コメントメタデータの保存
 		meta := CommentMetadata{
 			ID:        comment.ID,
 			CreatedAt: comment.Version.CreatedAt,
@@ -138,17 +136,15 @@ func (s *XHTMLSaver) SaveComments(pageTitle, spaceKey string, comments []Comment
 }
 
 // LoadPage はXHTMLとメタデータファイルからページを読み込む
-func (s *XHTMLSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label, error) {
+func (s *IntermediateSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label, error) {
 	dir := s.pageDir(spaceKey, pageTitle)
 
-	// XHTMLの読み込み
 	xhtmlPath := filepath.Join(dir, "content.xhtml")
 	xhtmlData, err := os.ReadFile(xhtmlPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("XHTMLファイル読み込みエラー: %w", err)
 	}
 
-	// メタデータの読み込み
 	metaPath := filepath.Join(dir, "metadata.toml")
 	var meta PageMetadata
 	if _, err := toml.DecodeFile(metaPath, &meta); err != nil {
@@ -176,7 +172,6 @@ func (s *XHTMLSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label, error
 		},
 	}
 
-	// ラベルの復元
 	labels := make([]Label, 0, len(meta.Labels))
 	for _, name := range meta.Labels {
 		labels = append(labels, Label{Name: name})
@@ -186,10 +181,9 @@ func (s *XHTMLSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label, error
 }
 
 // LoadComments はコメントXHTMLとメタデータを読み込む
-func (s *XHTMLSaver) LoadComments(spaceKey, pageTitle string) ([]Comment, error) {
+func (s *IntermediateSaver) LoadComments(spaceKey, pageTitle string) ([]Comment, error) {
 	commentsDir := filepath.Join(s.pageDir(spaceKey, pageTitle), "comments")
 
-	// コメントディレクトリが存在しない場合は空を返す
 	if _, err := os.Stat(commentsDir); os.IsNotExist(err) {
 		return []Comment{}, nil
 	}
@@ -211,13 +205,11 @@ func (s *XHTMLSaver) LoadComments(spaceKey, pageTitle string) ([]Comment, error)
 			return nil, fmt.Errorf("コメントXHTML読み込みエラー: %w", err)
 		}
 
-		// 対応するTOMLメタデータを読み込む
 		metaFile := strings.TrimSuffix(entry.Name(), ".xhtml") + ".toml"
 		metaPath := filepath.Join(commentsDir, metaFile)
 
 		var meta CommentMetadata
 		if _, err := toml.DecodeFile(metaPath, &meta); err != nil {
-			// メタデータが無くてもXHTMLは返す
 			meta = CommentMetadata{}
 		}
 
@@ -241,7 +233,7 @@ func (s *XHTMLSaver) LoadComments(spaceKey, pageTitle string) ([]Comment, error)
 }
 
 // ListPages はspaceKey配下の保存済みページタイトル一覧を返す
-func (s *XHTMLSaver) ListPages(spaceKey string) ([]string, error) {
+func (s *IntermediateSaver) ListPages(spaceKey string) ([]string, error) {
 	spaceDir := filepath.Join(s.baseDir, spaceKey)
 
 	entries, err := os.ReadDir(spaceDir)
@@ -257,7 +249,6 @@ func (s *XHTMLSaver) ListPages(spaceKey string) ([]string, error) {
 		if !entry.IsDir() {
 			continue
 		}
-		// metadata.tomlが存在するディレクトリのみ
 		metaPath := filepath.Join(spaceDir, entry.Name(), "metadata.toml")
 		if _, err := os.Stat(metaPath); err == nil {
 			pageTitles = append(pageTitles, entry.Name())
