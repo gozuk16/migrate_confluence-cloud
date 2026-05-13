@@ -25,9 +25,10 @@ type ConfluenceConfig struct {
 
 // OutputConfig は出力設定を表す構造体
 type OutputConfig struct {
-	MarkdownDir    string `toml:"markdown_dir"`    // Markdown出力ディレクトリ
-	AttachmentsDir string `toml:"attachments_dir"` // 添付ファイル保存ディレクトリ（空の場合はmarkdown_dir内に配置）
-	XHTMLDir       string `toml:"xhtml_dir"`       // XHTML中間ファイル保存ディレクトリ
+	MarkdownDir     string `toml:"markdown_dir"`
+	AttachmentsDir  string `toml:"attachments_dir"`
+	IntermediateDir string `toml:"intermediate_dir"`
+	HTMLDir         string `toml:"html_dir"`
 }
 
 // SearchConfig は検索設定を表す構造体
@@ -78,8 +79,11 @@ func (c *Config) Validate() error {
 	if c.Output.MarkdownDir == "" {
 		c.Output.MarkdownDir = "output/markdown"
 	}
-	if c.Output.XHTMLDir == "" {
-		c.Output.XHTMLDir = "output/xhtml"
+	if c.Output.IntermediateDir == "" {
+		c.Output.IntermediateDir = "output/intermediate"
+	}
+	if c.Output.HTMLDir == "" {
+		c.Output.HTMLDir = "output/html"
 	}
 
 	return nil

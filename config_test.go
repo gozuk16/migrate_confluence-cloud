@@ -28,7 +28,7 @@ api_token = "test-token-123"
 
 [output]
 markdown_dir = "output/markdown"
-xhtml_dir = "output/xhtml"
+intermediate_dir = "output/intermediate"
 
 [search]
 default_space_key = "TEST"
@@ -181,8 +181,8 @@ api_token = "test-token-123"
 				if config.Output.MarkdownDir != "output/markdown" {
 					t.Errorf("MarkdownDirのデフォルト値が期待と異なります: %q", config.Output.MarkdownDir)
 				}
-				if config.Output.XHTMLDir != "output/xhtml" {
-					t.Errorf("XHTMLDirのデフォルト値が期待と異なります: %q", config.Output.XHTMLDir)
+				if config.Output.IntermediateDir != "output/intermediate" {
+					t.Errorf("IntermediateDirのデフォルト値が期待と異なります: %q", config.Output.IntermediateDir)
 				}
 			}
 		})
@@ -206,8 +206,8 @@ func TestValidate(t *testing.T) {
 					APIToken: "test-token-123",
 				},
 				Output: OutputConfig{
-					MarkdownDir: "output/markdown",
-					XHTMLDir:    "output/xhtml",
+					MarkdownDir:     "output/markdown",
+					IntermediateDir: "output/intermediate",
 				},
 			},
 			wantErr: false,
@@ -287,8 +287,8 @@ func TestValidate(t *testing.T) {
 				if tt.config.Output.MarkdownDir != "output/markdown" {
 					t.Errorf("MarkdownDirのデフォルト値が期待と異なります: %q", tt.config.Output.MarkdownDir)
 				}
-				if tt.config.Output.XHTMLDir != "output/xhtml" {
-					t.Errorf("XHTMLDirのデフォルト値が期待と異なります: %q", tt.config.Output.XHTMLDir)
+				if tt.config.Output.IntermediateDir != "output/intermediate" {
+					t.Errorf("IntermediateDirのデフォルト値が期待と異なります: %q", tt.config.Output.IntermediateDir)
 				}
 			}
 		})

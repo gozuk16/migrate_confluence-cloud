@@ -145,7 +145,7 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 
 	var xhtmlSaver *XHTMLSaver
 	if saveXHTML {
-		xhtmlSaver = NewXHTMLSaver(cfg.Output.XHTMLDir)
+		xhtmlSaver = NewXHTMLSaver(cfg.Output.IntermediateDir)
 	}
 
 	var downloader *Downloader
@@ -284,7 +284,7 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 
 	var xhtmlSaver *XHTMLSaver
 	if saveXHTML {
-		xhtmlSaver = NewXHTMLSaver(cfg.Output.XHTMLDir)
+		xhtmlSaver = NewXHTMLSaver(cfg.Output.IntermediateDir)
 	}
 
 	var downloader *Downloader
@@ -336,12 +336,12 @@ func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
 
 	spaceKeyFilter := cmd.String("space-key")
 
-	xhtmlSaver := NewXHTMLSaver(cfg.Output.XHTMLDir)
+	xhtmlSaver := NewXHTMLSaver(cfg.Output.IntermediateDir)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
 	// XHTMLディレクトリを走査
-	xhtmlDir := cfg.Output.XHTMLDir
+	xhtmlDir := cfg.Output.IntermediateDir
 	entries, err := os.ReadDir(xhtmlDir)
 	if err != nil {
 		return fmt.Errorf("XHTMLディレクトリの読み込みに失敗しました (%s): %w", xhtmlDir, err)
