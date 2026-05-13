@@ -29,7 +29,7 @@ func (w *HTMLWriter) WritePage(page *Page, spaceKey, spaceName, parentTitle stri
 		bodyHTML = fmt.Sprintf("<p><em>変換エラー: %s</em></p>", gohtml.EscapeString(err.Error()))
 	}
 
-	doc := w.buildDocument(page, spaceKey, spaceName, bodyHTML, labels, comments)
+	doc := w.buildDocument(page, spaceName, bodyHTML, labels, comments)
 
 	safeTitle := sanitizeFilename(page.Title)
 	pageDir := filepath.Join(w.outputDir, spaceKey, safeTitle)
@@ -50,7 +50,7 @@ func parseDateTime(s string) (time.Time, error) {
 	return time.Parse("2006-01-02T15:04:05.000Z", s)
 }
 
-func (w *HTMLWriter) buildDocument(page *Page, spaceKey, spaceName, bodyHTML string, labels []Label, comments []Comment) string {
+func (w *HTMLWriter) buildDocument(page *Page, spaceName, bodyHTML string, labels []Label, comments []Comment) string {
 	var sb strings.Builder
 
 	sb.WriteString("<!DOCTYPE html>\n")
