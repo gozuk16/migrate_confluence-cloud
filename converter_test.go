@@ -117,7 +117,8 @@ func TestConvert_WarningMacro(t *testing.T) {
 	if err != nil {
 		t.Errorf("予期しないエラー: %v", err)
 	}
-	if !strings.Contains(result, "WARNING") {
+	// warning → CAUTION (GFM Alerts形式)
+	if !strings.Contains(result, "CAUTION") {
 		t.Errorf("warningマクロが変換されていません。結果: %q", result)
 	}
 }
@@ -181,12 +182,83 @@ func TestConvert_TaskList(t *testing.T) {
 	if err != nil {
 		t.Errorf("予期しないエラー: %v", err)
 	}
-	// タスクの内容が含まれていることを確認
+	// GFMタスクリスト形式 - [x] / - [ ] で変換されていることを確認
+	if !strings.Contains(result, "- [x]") {
+		t.Errorf("完了タスクが - [x] 形式になっていません。結果: %q", result)
+	}
+	if !strings.Contains(result, "- [ ]") {
+		t.Errorf("未完了タスクが - [ ] 形式になっていません。結果: %q", result)
+	}
 	if !strings.Contains(result, "完了したタスク") {
 		t.Errorf("完了タスクのボディが変換されていません。結果: %q", result)
 	}
 	if !strings.Contains(result, "未完了のタスク") {
 		t.Errorf("未完了タスクのボディが変換されていません。結果: %q", result)
+	}
+}
+
+// TestConvert_InfoMacroGFMAlert はinfoマクロのGFM Alert形式テスト
+func TestConvert_InfoMacroGFMAlert(t *testing.T) {
+	c := newTestConverter()
+	input := `<ac:structured-macro ac:name="info">
+<ac:parameter ac:name="title">重要な情報</ac:parameter>
+<ac:rich-text-body><p>詳細内容</p></ac:rich-text-body>
+</ac:structured-macro>`
+
+	result, err := c.Convert(input)
+	if err != nil {
+		t.Errorf("予期しないエラー: %v", err)
+	}
+	if !strings.Contains(result, "> [!NOTE]") {
+		t.Errorf("GFM Alert形式になっていません。結果: %q", result)
+	}
+	if !strings.Contains(result, "重要な情報") {
+		t.Errorf("タイトルが含まれていません。結果: %q", result)
+	}
+}
+
+// TestConvert_NewMacros は追加マクロの変換テスト
+func TestConvert_NewMacros(t *testing.T) {
+	c := newTestConverter()
+
+	tests := []struct {
+		name     string
+		input    string
+		contains string
+	}{
+		{
+			"quote",
+			`<ac:structured-macro ac:name="quote"><ac:rich-text-body><p>引用テキスト</p></ac:rich-text-body></ac:structured-macro>`,
+			"引用テキスト",
+		},
+		{
+			"noformat",
+			`<ac:structured-macro ac:name="noformat"><ac:plain-text-body><![CDATA[整形なし]]></ac:plain-text-body></ac:structured-macro>`,
+			"整形なし",
+		},
+		{
+			"status-color",
+			`<ac:structured-macro ac:name="status"><ac:parameter ac:name="colour">Red</ac:parameter><ac:parameter ac:name="title">障害</ac:parameter></ac:structured-macro>`,
+			"障害",
+		},
+		{
+			"status-green",
+			`<ac:structured-macro ac:name="status"><ac:parameter ac:name="colour">Green</ac:parameter><ac:parameter ac:name="title">完了</ac:parameter></ac:structured-macro>`,
+			"完了",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := c.Convert(tt.input)
+			if err != nil {
+				t.Errorf("変換エラー: %v", err)
+				return
+			}
+			if !strings.Contains(result, tt.contains) {
+				t.Errorf("期待する内容が含まれていません\n期待: %q\n実際: %q", tt.contains, result)
+			}
+		})
 	}
 }
 

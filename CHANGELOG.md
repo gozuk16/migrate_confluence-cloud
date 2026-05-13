@@ -3,6 +3,14 @@
 ## [Unreleased]
 
 ### Added
+- 変換品質改善（converter.go）:
+  - GFM Alerts対応: `> [!NOTE]` / `> [!WARNING]` / `> [!CAUTION]` / `> [!TIP]` 形式への変換
+  - タスクリスト修正: `- [ ]` / `- [x]` のGFMチェックボックス形式に変換
+  - 追加マクロ対応: noformat, quote, section, column, anchor, excerpt, details, jira, widget, gallery, multimedia, jirachart, children, pagetree, recently-updated, blog-posts, contentbylabel, excerpt-include, include
+  - 追加要素対応: fieldset, ac:inline-comment-marker, ac:placeholder, ac:layout/section/cell（ネストレイアウト解除）
+  - strikethrough（`~~text~~`）プラグイン追加
+  - 未対応要素レポート出力（unsupported_elements.md）: 未変換のマクロ・要素名と出現回数を記録
+  - ステータスマクロに色絵文字（🟢🟡🔴🔵🟣⚫）を追加
 - プロジェクト初期セットアップ（go.mod, Makefile, .gitignore, TODO.md, CHANGELOG.md）
 - 設定管理（config.go）: TOML設定ファイルの読み込み・バリデーション
 - Confluence REST API v2クライアント（confluenceclient.go）: Basic認証、ページ/スペース/添付/コメント/ラベル取得、カーソルページネーション対応

@@ -140,8 +140,8 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 	downloadAttachments := cmd.Bool("download-attachments")
 
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
-	converter := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
-	writer := NewMDWriter(cfg.Output.MarkdownDir, converter)
+	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
+	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
 	var xhtmlSaver *XHTMLSaver
 	if saveXHTML {
@@ -153,7 +153,17 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 		downloader = NewDownloader(cfg.Confluence.Email, cfg.Confluence.APIToken)
 	}
 
-	return processPage(client, writer, xhtmlSaver, downloader, cfg, pageID, recursive)
+	if err := processPage(client, writer, xhtmlSaver, downloader, cfg, pageID, recursive); err != nil {
+		return err
+	}
+
+	// 未対応要素レポートの出力
+	reportPath := filepath.Join(cfg.Output.MarkdownDir, "unsupported_elements.md")
+	if writeErr := conv.WriteUnsupportedReport(reportPath); writeErr != nil {
+		slog.Warn("未対応要素レポート出力エラー", "error", writeErr)
+	}
+
+	return nil
 }
 
 // processPage は1ページとオプションで子ページを処理する
@@ -269,8 +279,8 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	downloadAttachments := cmd.Bool("download-attachments")
 
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
-	converter := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
-	writer := NewMDWriter(cfg.Output.MarkdownDir, converter)
+	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
+	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
 	var xhtmlSaver *XHTMLSaver
 	if saveXHTML {
@@ -307,6 +317,13 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Printf("完了: %d ページを変換しました\n", len(pages))
+
+	// 未対応要素レポートの出力
+	reportPath := filepath.Join(cfg.Output.MarkdownDir, "unsupported_elements.md")
+	if writeErr := conv.WriteUnsupportedReport(reportPath); writeErr != nil {
+		slog.Warn("未対応要素レポート出力エラー", "error", writeErr)
+	}
+
 	return nil
 }
 
@@ -320,8 +337,8 @@ func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
 	spaceKeyFilter := cmd.String("space-key")
 
 	xhtmlSaver := NewXHTMLSaver(cfg.Output.XHTMLDir)
-	converter := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
-	writer := NewMDWriter(cfg.Output.MarkdownDir, converter)
+	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
+	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
 
 	// XHTMLディレクトリを走査
 	xhtmlDir := cfg.Output.XHTMLDir
@@ -376,6 +393,13 @@ func convertFromXHTML(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Printf("完了: 合計 %d ページを変換しました\n", totalConverted)
+
+	// 未対応要素レポートの出力
+	reportPath := filepath.Join(cfg.Output.MarkdownDir, "unsupported_elements.md")
+	if writeErr := conv.WriteUnsupportedReport(reportPath); writeErr != nil {
+		slog.Warn("未対応要素レポート出力エラー", "error", writeErr)
+	}
+
 	return nil
 }
 
