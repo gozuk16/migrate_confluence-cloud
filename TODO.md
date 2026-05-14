@@ -20,3 +20,9 @@
 - [x] Step 8: CLIエントリーポイント（main.go）
 - [x] Step 9: README.md作成
 - [x] Step 10: 変換品質改善（GFM Alerts, タスクリスト, 追加マクロ対応, 未対応要素レポート）
+- [x] Step 11: HTML出力追加と中間ファイル名称変更
+  - config.go: XHTMLDir→IntermediateDir、HTMLDir 追加
+  - IntermediateSaver（旧 XHTMLSaver）へのリネーム
+  - Converter.ToHTML() 追加
+  - HTMLWriter 新規実装
+  - main.go への HTMLWriter ワイヤリング

@@ -38,7 +38,7 @@ debug.log
 .claude/
 
 # Documentation build artifacts
-docs/
+docs/build/
 
 # Editor/IDE
 # .idea/

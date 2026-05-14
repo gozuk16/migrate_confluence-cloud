@@ -9,10 +9,12 @@ api_token = "your-api-token"
 [output]
 # Markdown出力ディレクトリ（デフォルト: output/markdown）
 markdown_dir = "output/markdown"
+# HTML出力ディレクトリ（デフォルト: output/html）
+html_dir = "output/html"
 # 添付ファイル保存ディレクトリ（空の場合はmarkdown_dir内のページディレクトリに配置）
 attachments_dir = ""
-# XHTML中間ファイル保存ディレクトリ（デフォルト: output/xhtml）
-xhtml_dir = "output/xhtml"
+# 中間ファイル保存ディレクトリ（デフォルト: output/intermediate）
+intermediate_dir = "output/intermediate"
 
 [search]
 # デフォルトのスペースキー（spaceコマンドでスペースキーを省略した場合に使用）
