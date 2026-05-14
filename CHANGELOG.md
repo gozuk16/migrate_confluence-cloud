@@ -2,7 +2,19 @@
 
 ## [Unreleased]
 
+### Changed
+- `XHTMLSaver` → `IntermediateSaver` にリネーム（中間ファイルの役割を明示）
+- CLIフラグ `--save-xhtml` → `--save-intermediate` に変更
+- 設定キー `xhtml_dir` → `intermediate_dir` に変更、デフォルト `output/intermediate`
+
 ### Added
+- `Converter.ToHTML()`: Confluence Storage Format → 標準 HTML ボディフラグメント変換
+- `HTMLWriter`: HTML Living Standard 出力（`output/html/{SPACE}/{PAGE}/index.html`）
+  - ページタイトル・メタ情報・ラベル・Confluence URL のヘッダー
+  - コメントセクション
+  - 最低限の CSS スタイリング（テーブル・コードブロック・パネル・details）
+- 設定キー `html_dir` を追加（デフォルト: `output/html`）
+- `page` / `space` / `convert` コマンドで Markdown と HTML を同時出力
 - 変換品質改善（converter.go）:
   - GFM Alerts対応: `> [!NOTE]` / `> [!WARNING]` / `> [!CAUTION]` / `> [!TIP]` 形式への変換
   - タスクリスト修正: `- [ ]` / `- [x]` のGFMチェックボックス形式に変換
