@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // ADFNode は Atlas Doc Format のドキュメントノード
@@ -68,6 +70,12 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 		return r.renderPanel(node)
 	case "table":
 		return r.renderTable(node)
+	case "taskList":
+		return r.renderTaskList(node)
+	case "decisionList":
+		return r.renderDecisionList(node)
+	case "expand", "nestedExpand":
+		return r.renderExpand(node)
 	default:
 		return ""
 	}
@@ -100,6 +108,14 @@ func (r *adfRenderer) renderInline(node ADFNode) string {
 		return r.renderText(node)
 	case "hardBreak":
 		return "\n"
+	case "mention":
+		return r.renderMention(node)
+	case "emoji":
+		return r.renderEmoji(node)
+	case "status":
+		return r.renderStatus(node)
+	case "date":
+		return r.renderDate(node)
 	default:
 		return ""
 	}
@@ -322,4 +338,117 @@ func (r *adfRenderer) renderPanel(node ADFNode) string {
 		}
 	}
 	return strings.TrimRight(sb.String(), "\n")
+}
+
+func (r *adfRenderer) renderTaskList(node ADFNode) string {
+	var lines []string
+	for _, item := range node.Content {
+		if item.Type != "taskItem" {
+			continue
+		}
+		state := ""
+		if item.Attrs != nil {
+			if s, ok := item.Attrs["state"].(string); ok {
+				state = s
+			}
+		}
+		check := "- [ ] "
+		if state == "DONE" {
+			check = "- [x] "
+		}
+		lines = append(lines, check+r.renderInlineNodes(item.Content))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (r *adfRenderer) renderDecisionList(node ADFNode) string {
+	var lines []string
+	for _, item := range node.Content {
+		if item.Type == "decisionItem" {
+			lines = append(lines, "- "+r.renderInlineNodes(item.Content))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (r *adfRenderer) renderExpand(node ADFNode) string {
+	title := "詳細"
+	if node.Attrs != nil {
+		if ttl, ok := node.Attrs["title"].(string); ok && ttl != "" {
+			title = ttl
+		}
+	}
+	inner := r.renderBlockChildren(node.Content, 0)
+	return "<details><summary>" + title + "</summary>\n\n" + inner + "\n\n</details>"
+}
+
+func (r *adfRenderer) renderStatus(node ADFNode) string {
+	color := ""
+	text := "STATUS"
+	if node.Attrs != nil {
+		if c, ok := node.Attrs["color"].(string); ok {
+			color = c
+		}
+		if t, ok := node.Attrs["text"].(string); ok && t != "" {
+			text = t
+		}
+	}
+	emoji := statusColorEmoji(color)
+	return emoji + "[" + text + "]"
+}
+
+func statusColorEmoji(color string) string {
+	switch strings.ToLower(color) {
+	case "green":
+		return "🟢"
+	case "yellow":
+		return "🟡"
+	case "red":
+		return "🔴"
+	case "blue":
+		return "🔵"
+	case "purple":
+		return "🟣"
+	default:
+		return "⚫"
+	}
+}
+
+func (r *adfRenderer) renderMention(node ADFNode) string {
+	text := ""
+	if node.Attrs != nil {
+		if t, ok := node.Attrs["text"].(string); ok {
+			text = t
+		}
+	}
+	return "**" + text + "**"
+}
+
+func (r *adfRenderer) renderEmoji(node ADFNode) string {
+	if node.Attrs == nil {
+		return ""
+	}
+	if s, ok := node.Attrs["text"].(string); ok && s != "" {
+		return s
+	}
+	if s, ok := node.Attrs["shortName"].(string); ok {
+		return s
+	}
+	return ""
+}
+
+func (r *adfRenderer) renderDate(node ADFNode) string {
+	if node.Attrs == nil {
+		return ""
+	}
+	ts, ok := node.Attrs["timestamp"].(string)
+	if !ok {
+		return ""
+	}
+	ms, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return ts
+	}
+	t := time.UnixMilli(ms).UTC()
+	return t.Format("2006-01-02")
 }

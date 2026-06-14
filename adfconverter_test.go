@@ -367,3 +367,100 @@ func TestConvertADF_TableSingleRow(t *testing.T) {
 		t.Errorf("got %q, want cell", got)
 	}
 }
+
+func TestConvertADF_TaskList(t *testing.T) {
+	adf := adfDoc(`{"type":"taskList","content":[
+        {"type":"taskItem","attrs":{"state":"DONE"},"content":[{"type":"text","text":"Done task"}]},
+        {"type":"taskItem","attrs":{"state":"TODO"},"content":[{"type":"text","text":"Todo task"}]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "- [x] Done task") {
+		t.Errorf("got %q, want checked task", got)
+	}
+	if !strings.Contains(got, "- [ ] Todo task") {
+		t.Errorf("got %q, want unchecked task", got)
+	}
+}
+
+func TestConvertADF_DecisionList(t *testing.T) {
+	adf := adfDoc(`{"type":"decisionList","content":[
+        {"type":"decisionItem","content":[{"type":"text","text":"Decision A"}]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "- Decision A") {
+		t.Errorf("got %q, want decision as list item", got)
+	}
+}
+
+func TestConvertADF_Expand(t *testing.T) {
+	adf := adfDoc(`{"type":"expand","attrs":{"title":"More info"},"content":[{"type":"paragraph","content":[{"type":"text","text":"hidden content"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "<details>") {
+		t.Errorf("got %q, want <details>", got)
+	}
+	if !strings.Contains(got, "<summary>More info</summary>") {
+		t.Errorf("got %q, want summary", got)
+	}
+	if !strings.Contains(got, "hidden content") {
+		t.Errorf("got %q, want hidden content", got)
+	}
+}
+
+func TestConvertADF_Status(t *testing.T) {
+	tests := []struct {
+		color string
+		emoji string
+	}{
+		{"green", "🟢"},
+		{"red", "🔴"},
+		{"yellow", "🟡"},
+		{"blue", "🔵"},
+		{"purple", "🟣"},
+		{"neutral", "⚫"},
+	}
+	for _, tt := range tests {
+		adf := adfDoc(fmt.Sprintf(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"%s","text":"OK"}}]}`, tt.color))
+		got, err := convertADF(adf, nil)
+		if err != nil {
+			t.Fatalf("color %s: unexpected error: %v", tt.color, err)
+		}
+		if !strings.Contains(got, tt.emoji) {
+			t.Errorf("color %s: got %q, want emoji %s", tt.color, got, tt.emoji)
+		}
+		if !strings.Contains(got, "[OK]") {
+			t.Errorf("color %s: got %q, want [OK]", tt.color, got)
+		}
+	}
+}
+
+func TestConvertADF_Mention(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"mention","attrs":{"id":"abc123","text":"@John Doe"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "**@John Doe**") {
+		t.Errorf("got %q, want mention", got)
+	}
+}
+
+func TestConvertADF_Date(t *testing.T) {
+	// timestamp は ms エポック文字列
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"date","attrs":{"timestamp":"1704067200000"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "2024-01-01") {
+		t.Errorf("got %q, want date 2024-01-01", got)
+	}
+}
