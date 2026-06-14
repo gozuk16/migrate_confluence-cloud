@@ -326,3 +326,44 @@ func TestConvertADF_PanelError(t *testing.T) {
 		t.Errorf("got %q, want [!CAUTION] for error panel", got)
 	}
 }
+
+func TestConvertADF_Table(t *testing.T) {
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Col1"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Col2"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]},
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "| Col1 |") {
+		t.Errorf("got %q, want header row", got)
+	}
+	if !strings.Contains(got, "| --- |") {
+		t.Errorf("got %q, want separator row", got)
+	}
+	if !strings.Contains(got, "| A |") {
+		t.Errorf("got %q, want data row", got)
+	}
+}
+
+func TestConvertADF_TableSingleRow(t *testing.T) {
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"X"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "| X |") {
+		t.Errorf("got %q, want cell", got)
+	}
+}

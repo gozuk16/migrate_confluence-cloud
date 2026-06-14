@@ -66,6 +66,8 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 		return r.renderCodeBlock(node)
 	case "panel":
 		return r.renderPanel(node)
+	case "table":
+		return r.renderTable(node)
 	default:
 		return ""
 	}
@@ -247,6 +249,50 @@ func (r *adfRenderer) renderCodeBlock(node ADFNode) string {
 		}
 	}
 	return "```" + lang + "\n" + sb.String() + "\n```"
+}
+
+func (r *adfRenderer) renderTable(node ADFNode) string {
+	var sb strings.Builder
+	firstRow := true
+	var colCount int
+	for _, row := range node.Content {
+		if row.Type != "tableRow" {
+			continue
+		}
+		if firstRow {
+			colCount = len(row.Content)
+		}
+		sb.WriteString("|")
+		for _, cell := range row.Content {
+			cellText := r.renderTableCell(cell)
+			sb.WriteString(" " + cellText + " |")
+		}
+		sb.WriteString("\n")
+		if firstRow && colCount > 0 {
+			sb.WriteString("|")
+			for i := 0; i < colCount; i++ {
+				sb.WriteString(" --- |")
+			}
+			sb.WriteString("\n")
+			firstRow = false
+		} else {
+			firstRow = false
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func (r *adfRenderer) renderTableCell(node ADFNode) string {
+	var parts []string
+	for _, child := range node.Content {
+		text := strings.TrimSpace(r.renderNode(child, 0))
+		text = strings.ReplaceAll(text, "\n", " ")
+		text = strings.ReplaceAll(text, "|", "\\|")
+		if text != "" {
+			parts = append(parts, text)
+		}
+	}
+	return strings.Join(parts, " ")
 }
 
 func (r *adfRenderer) renderPanel(node ADFNode) string {
