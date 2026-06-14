@@ -108,7 +108,7 @@ func main() {
 			{
 				Name:    "convert",
 				Aliases: []string{"conv"},
-				Usage:   "保存済み中間ファイルからMarkdownとHTMLに変換する（APIアクセス不要）",
+				Usage:   "保存済み中間ファイルからMarkdownに変換する（APIアクセス不要）",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:    "space-key",
@@ -142,7 +142,6 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
-	htmlWriter := NewHTMLWriter(cfg.Output.HTMLDir, conv)
 
 	var intermediateSaver *IntermediateSaver
 	if saveIntermediate {
@@ -154,7 +153,7 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 		downloader = NewDownloader(cfg.Confluence.Email, cfg.Confluence.APIToken)
 	}
 
-	if err := processPage(client, writer, htmlWriter, intermediateSaver, downloader, cfg, pageID, recursive); err != nil {
+	if err := processPage(client, writer, intermediateSaver, downloader, cfg, pageID, recursive); err != nil {
 		return err
 	}
 
@@ -168,7 +167,7 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 }
 
 // processPage は1ページとオプションで子ページを処理する
-func processPage(client *ConfluenceClient, writer *MDWriter, htmlWriter *HTMLWriter, intermediateSaver *IntermediateSaver, downloader *Downloader, cfg *Config, pageID string, recursive bool) error {
+func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *IntermediateSaver, downloader *Downloader, cfg *Config, pageID string, recursive bool) error {
 	slog.Info("ページ取得中", "pageID", pageID)
 
 	// ページ取得
@@ -242,11 +241,6 @@ func processPage(client *ConfluenceClient, writer *MDWriter, htmlWriter *HTMLWri
 		return fmt.Errorf("Markdown生成エラー: %w", err)
 	}
 
-	// HTML生成
-	if err := htmlWriter.WritePage(page, space.Key, space.Name, parentTitle, labels, comments, attachments); err != nil {
-		slog.Warn("HTML生成エラー", "pageID", pageID, "error", err)
-	}
-
 	fmt.Printf("変換完了: %s/%s (%s)\n", space.Key, page.Title, pageID)
 
 	// 子ページの再帰処理
@@ -257,7 +251,7 @@ func processPage(client *ConfluenceClient, writer *MDWriter, htmlWriter *HTMLWri
 			return nil
 		}
 		for _, childPage := range childPages {
-			if err := processPage(client, writer, htmlWriter, intermediateSaver, downloader, cfg, childPage.ID, recursive); err != nil {
+			if err := processPage(client, writer, intermediateSaver, downloader, cfg, childPage.ID, recursive); err != nil {
 				slog.Warn("子ページ処理エラー", "pageID", childPage.ID, "error", err)
 			}
 		}
@@ -287,7 +281,6 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
-	htmlWriter := NewHTMLWriter(cfg.Output.HTMLDir, conv)
 
 	var intermediateSaver *IntermediateSaver
 	if saveIntermediate {
@@ -318,7 +311,7 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	// 各ページを処理
 	for i, page := range pages {
 		fmt.Printf("[%d/%d] 処理中: %s (%s)\n", i+1, len(pages), page.Title, page.ID)
-		if err := processPage(client, writer, htmlWriter, intermediateSaver, downloader, cfg, page.ID, false); err != nil {
+		if err := processPage(client, writer, intermediateSaver, downloader, cfg, page.ID, false); err != nil {
 			slog.Warn("ページ処理エラー", "pageID", page.ID, "title", page.Title, "error", err)
 		}
 	}
@@ -346,7 +339,6 @@ func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 	intermediateSaver := NewIntermediateSaver(cfg.Output.IntermediateDir)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
-	htmlWriter := NewHTMLWriter(cfg.Output.HTMLDir, conv)
 
 	// 中間ファイルディレクトリを走査
 	intermediateDir := cfg.Output.IntermediateDir
@@ -394,11 +386,6 @@ func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 			if err := writer.WritePage(page, spaceKey, "", "", labels, comments, nil); err != nil {
 				slog.Warn("Markdown生成エラー", "pageTitle", pageTitle, "error", err)
 				continue
-			}
-
-			// HTML生成（失敗しても変換済みカウントは増加）
-			if err := htmlWriter.WritePage(page, spaceKey, "", "", labels, comments, nil); err != nil {
-				slog.Warn("HTML生成エラー", "pageTitle", pageTitle, "error", err)
 			}
 
 			totalConverted++
