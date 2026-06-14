@@ -13,9 +13,9 @@ func makeTestPage() *Page {
 		Status:  "current",
 		SpaceID: "67890",
 		Body: PageBody{
-			Storage: Storage{
-				Value:          "<p>テストコンテンツ</p>",
-				Representation: "storage",
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"テストコンテンツ"}]}]}`,
+				Representation: "atlas_doc_format",
 			},
 		},
 		Version: Version{
@@ -44,9 +44,9 @@ func TestIntermediateSaver_SaveAndLoadPage(t *testing.T) {
 		t.Fatalf("保存エラー: %v", err)
 	}
 
-	xhtmlPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "content.xhtml")
-	if _, err := os.Stat(xhtmlPath); os.IsNotExist(err) {
-		t.Errorf("XHTMLファイルが作成されていません: %s", xhtmlPath)
+	jsonPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "content.json")
+	if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+		t.Errorf("JSONファイルが作成されていません: %s", jsonPath)
 	}
 
 	metaPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "metadata.toml")
@@ -65,9 +65,9 @@ func TestIntermediateSaver_SaveAndLoadPage(t *testing.T) {
 	if loadedPage.Title != page.Title {
 		t.Errorf("タイトルが一致しません\n期待: %q\n実際: %q", page.Title, loadedPage.Title)
 	}
-	if loadedPage.Body.Storage.Value != page.Body.Storage.Value {
-		t.Errorf("XHTMLコンテンツが一致しません\n期待: %q\n実際: %q",
-			page.Body.Storage.Value, loadedPage.Body.Storage.Value)
+	if loadedPage.Body.AtlasDocFormat.Value != page.Body.AtlasDocFormat.Value {
+		t.Errorf("ADFコンテンツが一致しません\n期待: %q\n実際: %q",
+			page.Body.AtlasDocFormat.Value, loadedPage.Body.AtlasDocFormat.Value)
 	}
 	if loadedPage.Version.Number != page.Version.Number {
 		t.Errorf("バージョン番号が一致しません\n期待: %d\n実際: %d",
@@ -162,10 +162,10 @@ func TestIntermediateSaver_ListPages(t *testing.T) {
 
 	pages := []*Page{
 		{ID: "1", Title: "ページA", Status: "current", SpaceID: "TEST",
-			Body:    PageBody{Storage: Storage{Value: "<p>A</p>"}},
+			Body:    PageBody{AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`, Representation: "atlas_doc_format"}},
 			Version: Version{Number: 1}},
 		{ID: "2", Title: "ページB", Status: "current", SpaceID: "TEST",
-			Body:    PageBody{Storage: Storage{Value: "<p>B</p>"}},
+			Body:    PageBody{AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`, Representation: "atlas_doc_format"}},
 			Version: Version{Number: 1}},
 	}
 

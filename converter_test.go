@@ -323,56 +323,6 @@ func TestConvert_Table(t *testing.T) {
 	}
 }
 
-// TestConverter_ToHTML は ToHTML メソッドのテスト
-func TestConverter_ToHTML(t *testing.T) {
-	c := newTestConverter()
-
-	tests := []struct {
-		name     string
-		input    string
-		contains string
-	}{
-		{
-			name:     "空文字列",
-			input:    "",
-			contains: "",
-		},
-		{
-			name:     "段落",
-			input:    "<p>Hello, World!</p>",
-			contains: "Hello, World!",
-		},
-		{
-			name:     "コードブロックマクロ",
-			input:    `<ac:structured-macro ac:name="code"><ac:parameter ac:name="language">go</ac:parameter><ac:plain-text-body><![CDATA[fmt.Println("hello")]]></ac:plain-text-body></ac:structured-macro>`,
-			contains: "<pre>",
-		},
-		{
-			name:     "infoマクロ",
-			input:    `<ac:structured-macro ac:name="info"><ac:rich-text-body><p>メモ</p></ac:rich-text-body></ac:structured-macro>`,
-			contains: "<blockquote>",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := c.ToHTML(tt.input)
-			if err != nil {
-				t.Errorf("予期しないエラー: %v", err)
-			}
-			if tt.contains == "" {
-				if result != "" {
-					t.Errorf("空を期待しましたが %q が返りました", result)
-				}
-				return
-			}
-			if !strings.Contains(result, tt.contains) {
-				t.Errorf("結果に %q が含まれていません。結果: %q", tt.contains, result)
-			}
-		})
-	}
-}
-
 // TestEmoticonToEmoji はemoticonToEmojiのテスト
 func TestEmoticonToEmoji(t *testing.T) {
 	tests := []struct {
@@ -390,5 +340,31 @@ func TestEmoticonToEmoji(t *testing.T) {
 		if result != tt.emoji {
 			t.Errorf("emoticonToEmoji(%q) = %q, 期待: %q", tt.name, result, tt.emoji)
 		}
+	}
+}
+
+func TestConvertADF_ViaConverter(t *testing.T) {
+	c := newTestConverter()
+	adfJSON := `{"version":1,"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Title"}]},{"type":"paragraph","content":[{"type":"text","text":"Body"}]}]}`
+	got, err := c.ConvertADF(adfJSON, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "# Title") {
+		t.Errorf("got %q, want heading", got)
+	}
+	if !strings.Contains(got, "Body") {
+		t.Errorf("got %q, want body", got)
+	}
+}
+
+func TestConvertADF_ViaConverterEmpty(t *testing.T) {
+	c := newTestConverter()
+	got, err := c.ConvertADF("", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty", got)
 	}
 }

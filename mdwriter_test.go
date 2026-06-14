@@ -27,6 +27,10 @@ func TestMDWriter_WritePage(t *testing.T) {
 				Value:          "<p>テストコンテンツ</p>",
 				Representation: "storage",
 			},
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"テストコンテンツ"}]}]}`,
+				Representation: "atlas_doc_format",
+			},
 		},
 		Version: Version{
 			Number:    1,
@@ -89,7 +93,13 @@ func TestMDWriter_WritePage_WithComments(t *testing.T) {
 	page := &Page{
 		ID:    "12345",
 		Title: "コメント付きページ",
-		Body:  PageBody{Storage: Storage{Value: "<p>本文</p>"}},
+		Body: PageBody{
+			Storage: Storage{Value: "<p>本文</p>"},
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`,
+				Representation: "atlas_doc_format",
+			},
+		},
 		Version: Version{
 			Number:    1,
 			CreatedAt: "2024-01-01T00:00:00.000Z",
@@ -142,7 +152,13 @@ func TestMDWriter_WritePage_WithAttachments(t *testing.T) {
 	page := &Page{
 		ID:    "12345",
 		Title: "添付ファイル付きページ",
-		Body:  PageBody{Storage: Storage{Value: "<p>本文</p>"}},
+		Body: PageBody{
+			Storage: Storage{Value: "<p>本文</p>"},
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`,
+				Representation: "atlas_doc_format",
+			},
+		},
 		Version: Version{
 			Number:    1,
 			CreatedAt: "2024-01-01T00:00:00.000Z",

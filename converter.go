@@ -205,13 +205,9 @@ func (c *Converter) Convert(xhtml string) (string, error) {
 	return strings.TrimSpace(result), nil
 }
 
-// ToHTML は Confluence Storage Format を標準 HTML ボディフラグメントに変換する。
-// Converter.preprocess() の公開ラッパー。HTMLWriter から利用される。
-func (c *Converter) ToHTML(xhtml string) (string, error) {
-	if xhtml == "" {
-		return "", nil
-	}
-	return c.preprocess(xhtml)
+// ConvertADF は ADF JSON 文字列を Markdown に変換する（ページ本文用）
+func (c *Converter) ConvertADF(adfJSON string, attachmentMap map[string]string) (string, error) {
+	return convertADF(adfJSON, attachmentMap)
 }
 
 // preprocess はConfluence固有要素を標準HTMLに変換する

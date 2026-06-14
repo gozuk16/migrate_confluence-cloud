@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Changed（ADF移行）
+- ページ取得フォーマットを `body-format=storage`（独自 XHTML）から `body-format=atlas_doc_format`（ADF JSON）に移行
+- 中間ファイルを `content.xhtml` から `content.json`（ADF JSON）に変更
+- ページ本文変換パイプラインを `Converter.Convert()` (XHTML→HTML→MD) から `Converter.ConvertADF()` (ADF JSON→MD 直接変換) に切り替え
+- `config.toml` の `html_dir` 設定を廃止
+
+### Removed（ADF移行）
+- HTML 出力機能（`HTMLWriter`、`Converter.ToHTML()`）を廃止。Markdown 出力のみに統一
+- `config.go` の `HTMLDir` フィールドを削除
+
+### Added（ADF移行）
+- `adfconverter.go`: ADF JSON → Markdown 直接変換エンジン
+  - テキスト/マーク変換（bold, italic, code, strike, underline, link, sub/superscript）
+  - 見出し・リスト（bulletList, orderedList, ネスト対応）・引用・水平線
+  - コードブロック（言語指定付き）
+  - パネル → GFM Alerts（info→`[!NOTE]`, note→`[!WARNING]`, warning/error→`[!CAUTION]`, success→`[!TIP]`）
+  - テーブル（tableHeader/tableCell 対応）
+  - タスクリスト・decisionList・expand（`<details>`/`<summary>`）
+  - status（色絵文字）・mention・emoji・date（エポックms→ISO日付）
+  - メディア（external URL・添付ファイル UUID解決）・レイアウト・extension・card
+  - Confluence 内部 URL を相対パスに変換
+- `Converter.ConvertADF()`: ADF JSON → Markdown のパブリック API
+- `buildAttachmentMap()`: 添付ファイル UUID → ファイル名マップ構築ヘルパー
+
 ### Changed
 - `XHTMLSaver` → `IntermediateSaver` にリネーム（中間ファイルの役割を明示）
 - CLIフラグ `--save-xhtml` → `--save-intermediate` に変更
