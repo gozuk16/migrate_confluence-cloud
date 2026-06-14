@@ -46,7 +46,14 @@ type Page struct {
 
 // PageBody はページのボディコンテンツ
 type PageBody struct {
-	Storage Storage `json:"storage"`
+	Storage        Storage        `json:"storage"`
+	AtlasDocFormat AtlasDocFormat `json:"atlas_doc_format"`
+}
+
+// AtlasDocFormat は ADF 形式のコンテンツ（value はさらに JSON 文字列）
+type AtlasDocFormat struct {
+	Value          string `json:"value"`
+	Representation string `json:"representation"`
 }
 
 // Storage はStorage Format（XHTML）のコンテンツ
@@ -189,7 +196,7 @@ func (cc *ConfluenceClient) doRequest(method, apiURL string) ([]byte, error) {
 
 // GetPage は単一ページをStorage Format（XHTML）で取得する
 func (cc *ConfluenceClient) GetPage(pageID string) (*Page, error) {
-	apiURL := fmt.Sprintf("%s/wiki/api/v2/pages/%s?body-format=storage", cc.baseURL, pageID)
+	apiURL := fmt.Sprintf("%s/wiki/api/v2/pages/%s?body-format=atlas_doc_format", cc.baseURL, pageID)
 
 	body, err := cc.doRequest("GET", apiURL)
 	if err != nil {
@@ -210,7 +217,7 @@ func (cc *ConfluenceClient) GetChildPages(pageID string) ([]Page, error) {
 	cursor := ""
 
 	for {
-		apiURL := fmt.Sprintf("%s/wiki/api/v2/pages/%s/children?body-format=storage&limit=250", cc.baseURL, pageID)
+		apiURL := fmt.Sprintf("%s/wiki/api/v2/pages/%s/children?body-format=atlas_doc_format&limit=250", cc.baseURL, pageID)
 		if cursor != "" {
 			apiURL += "&cursor=" + url.QueryEscape(cursor)
 		}
