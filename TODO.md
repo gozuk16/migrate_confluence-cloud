@@ -26,3 +26,10 @@
   - Converter.ToHTML() 追加
   - HTMLWriter 新規実装
   - main.go への HTMLWriter ワイヤリング
+- [x] Step 12: ADF移行（atlas_doc_format）
+  - HTML出力廃止・Markdownのみに変更
+  - PageBody に AtlasDocFormat フィールド追加・API URL を atlas_doc_format に変更
+  - adfconverter.go 新規実装（ADF JSON → Markdown 直接変換）
+  - Converter.ConvertADF() 追加
+  - IntermediateSaver を ADF JSON 保存・読み込みに変更
+  - MDWriter のページ本文変換を ConvertADF に切り替え
