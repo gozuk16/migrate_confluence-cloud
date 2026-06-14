@@ -194,7 +194,7 @@ func (cc *ConfluenceClient) doRequest(method, apiURL string) ([]byte, error) {
 	return body, nil
 }
 
-// GetPage は単一ページをStorage Format（XHTML）で取得する
+// GetPage は単一ページを ADF（Atlas Doc Format）で取得する
 func (cc *ConfluenceClient) GetPage(pageID string) (*Page, error) {
 	apiURL := fmt.Sprintf("%s/wiki/api/v2/pages/%s?body-format=atlas_doc_format", cc.baseURL, pageID)
 
