@@ -33,7 +33,7 @@ type CommentMetadata struct {
 	AuthorID  string `toml:"author_id"`
 }
 
-// IntermediateSaver は中間ファイル（Confluence Storage Format）の保存・読み込みを管理する
+// IntermediateSaver は中間ファイル（ADF JSON）の保存・読み込みを管理する
 type IntermediateSaver struct {
 	baseDir string
 }
@@ -49,15 +49,15 @@ func (s *IntermediateSaver) pageDir(spaceKey, pageTitle string) string {
 	return filepath.Join(s.baseDir, spaceKey, safeTitle)
 }
 
-// SavePage はページのXHTMLとメタデータをファイルに保存する
+// SavePage はページのADF JSONとメタデータをファイルに保存する
 func (s *IntermediateSaver) SavePage(page *Page, spaceKey string, labels []Label) error {
 	dir := s.pageDir(spaceKey, page.Title)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("ディレクトリ作成エラー: %w", err)
 	}
 
-	xhtmlPath := filepath.Join(dir, "content.xhtml")
-	if err := os.WriteFile(xhtmlPath, []byte(page.Body.Storage.Value), 0644); err != nil {
+	jsonPath := filepath.Join(dir, "content.json")
+	if err := os.WriteFile(jsonPath, []byte(page.Body.AtlasDocFormat.Value), 0644); err != nil {
 		return fmt.Errorf("中間ファイル保存エラー: %w", err)
 	}
 
@@ -138,8 +138,8 @@ func (s *IntermediateSaver) SaveComments(pageTitle, spaceKey string, comments []
 func (s *IntermediateSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label, error) {
 	dir := s.pageDir(spaceKey, pageTitle)
 
-	xhtmlPath := filepath.Join(dir, "content.xhtml")
-	xhtmlData, err := os.ReadFile(xhtmlPath)
+	jsonPath := filepath.Join(dir, "content.json")
+	jsonData, err := os.ReadFile(jsonPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("中間ファイル読み込みエラー: %w", err)
 	}
@@ -156,9 +156,9 @@ func (s *IntermediateSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label
 		Status:  meta.Status,
 		SpaceID: meta.SpaceID,
 		Body: PageBody{
-			Storage: Storage{
-				Value:          string(xhtmlData),
-				Representation: "storage",
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          string(jsonData),
+				Representation: "atlas_doc_format",
 			},
 		},
 		Version: Version{
