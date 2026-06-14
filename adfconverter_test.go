@@ -464,3 +464,84 @@ func TestConvertADF_Date(t *testing.T) {
 		t.Errorf("got %q, want date 2024-01-01", got)
 	}
 }
+
+func TestConvertADF_MediaExternalImage(t *testing.T) {
+	adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"external","url":"https://example.com/img.png","alt":"alt text"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "![alt text](https://example.com/img.png)") {
+		t.Errorf("got %q, want external image", got)
+	}
+}
+
+func TestConvertADF_MediaFileWithMap(t *testing.T) {
+	attachmentMap := map[string]string{"uuid-123": "photo.png"}
+	adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"file","id":"uuid-123","alt":"photo"}}]}`)
+	got, err := convertADF(adf, attachmentMap)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "photo.png") {
+		t.Errorf("got %q, want filename resolved", got)
+	}
+}
+
+func TestConvertADF_MediaFileUnknown(t *testing.T) {
+	adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"file","id":"unknown-uuid"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "attachment-unknown-uuid") {
+		t.Errorf("got %q, want fallback filename", got)
+	}
+}
+
+func TestConvertADF_LayoutSection(t *testing.T) {
+	adf := adfDoc(`{"type":"layoutSection","content":[
+        {"type":"layoutColumn","content":[{"type":"paragraph","content":[{"type":"text","text":"Left"}]}]},
+        {"type":"layoutColumn","content":[{"type":"paragraph","content":[{"type":"text","text":"Right"}]}]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "Left") || !strings.Contains(got, "Right") {
+		t.Errorf("got %q, want layout content", got)
+	}
+}
+
+func TestConvertADF_Extension(t *testing.T) {
+	adf := adfDoc(`{"type":"extension","attrs":{"extensionKey":"jira"}}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "<!-- macro: jira -->") {
+		t.Errorf("got %q, want macro comment", got)
+	}
+}
+
+func TestConvertADF_BodiedExtensionWithContent(t *testing.T) {
+	adf := adfDoc(`{"type":"bodiedExtension","attrs":{"extensionKey":"custom"},"content":[{"type":"paragraph","content":[{"type":"text","text":"body content"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "body content") {
+		t.Errorf("got %q, want body content expanded", got)
+	}
+}
+
+func TestConvertADF_InlineCard(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"inlineCard","attrs":{"url":"https://example.com"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "https://example.com") {
+		t.Errorf("got %q, want URL", got)
+	}
+}

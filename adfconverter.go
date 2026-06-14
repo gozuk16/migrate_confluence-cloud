@@ -76,6 +76,20 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 		return r.renderDecisionList(node)
 	case "expand", "nestedExpand":
 		return r.renderExpand(node)
+	case "mediaSingle", "mediaGroup":
+		return r.renderMediaContainer(node)
+	case "layoutSection":
+		return r.renderBlockChildren(node.Content, indent)
+	case "layoutColumn":
+		return r.renderBlockChildren(node.Content, indent)
+	case "extension", "inlineExtension":
+		return r.renderExtension(node)
+	case "bodiedExtension":
+		return r.renderBodiedExtension(node)
+	case "blockCard":
+		return r.renderCard(node)
+	case "embedCard":
+		return r.renderEmbedCard(node)
 	default:
 		return ""
 	}
@@ -116,6 +130,10 @@ func (r *adfRenderer) renderInline(node ADFNode) string {
 		return r.renderStatus(node)
 	case "date":
 		return r.renderDate(node)
+	case "inlineCard":
+		return r.renderCard(node)
+	case "mediaInline":
+		return r.renderMediaInline(node)
 	default:
 		return ""
 	}
@@ -451,4 +469,82 @@ func (r *adfRenderer) renderDate(node ADFNode) string {
 	}
 	t := time.UnixMilli(ms).UTC()
 	return t.Format("2006-01-02")
+}
+
+func (r *adfRenderer) renderMediaContainer(node ADFNode) string {
+	var parts []string
+	for _, child := range node.Content {
+		if child.Type == "media" {
+			parts = append(parts, r.renderMedia(child))
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func (r *adfRenderer) renderMedia(node ADFNode) string {
+	if node.Attrs == nil {
+		return ""
+	}
+	alt := ""
+	if a, ok := node.Attrs["alt"].(string); ok {
+		alt = a
+	}
+	mediaType, _ := node.Attrs["type"].(string)
+	switch mediaType {
+	case "external":
+		u, _ := node.Attrs["url"].(string)
+		return "![" + alt + "](" + u + ")"
+	case "file":
+		id, _ := node.Attrs["id"].(string)
+		filename := "attachment-" + id
+		if r.attachmentMap != nil {
+			if f, ok := r.attachmentMap[id]; ok {
+				filename = f
+			}
+		}
+		return "![" + alt + "](" + filename + ")"
+	default:
+		return ""
+	}
+}
+
+func (r *adfRenderer) renderMediaInline(node ADFNode) string {
+	return r.renderMedia(node)
+}
+
+func (r *adfRenderer) renderExtension(node ADFNode) string {
+	key := ""
+	if node.Attrs != nil {
+		if k, ok := node.Attrs["extensionKey"].(string); ok {
+			key = k
+		}
+	}
+	return "<!-- macro: " + key + " -->"
+}
+
+func (r *adfRenderer) renderBodiedExtension(node ADFNode) string {
+	if len(node.Content) > 0 {
+		return r.renderBlockChildren(node.Content, 0)
+	}
+	return r.renderExtension(node)
+}
+
+func (r *adfRenderer) renderCard(node ADFNode) string {
+	u := ""
+	if node.Attrs != nil {
+		if v, ok := node.Attrs["url"].(string); ok {
+			u = convertInternalURL(v)
+		}
+	}
+	return "[" + u + "](" + u + ")"
+}
+
+func (r *adfRenderer) renderEmbedCard(node ADFNode) string {
+	u := ""
+	if node.Attrs != nil {
+		if v, ok := node.Attrs["url"].(string); ok {
+			u = v
+		}
+	}
+	return "<!-- embed: " + u + " -->"
 }
