@@ -12,17 +12,17 @@ import (
 
 // ADFNode は Atlas Doc Format のドキュメントノード
 type ADFNode struct {
-	Type    string                 `json:"type"`
-	Attrs   map[string]interface{} `json:"attrs,omitempty"`
-	Content []ADFNode              `json:"content,omitempty"`
-	Marks   []ADFMark              `json:"marks,omitempty"`
-	Text    string                 `json:"text,omitempty"`
+	Type    string         `json:"type"`
+	Attrs   map[string]any `json:"attrs,omitempty"`
+	Content []ADFNode      `json:"content,omitempty"`
+	Marks   []ADFMark      `json:"marks,omitempty"`
+	Text    string         `json:"text,omitempty"`
 }
 
 // ADFMark はインラインフォーマットマーク
 type ADFMark struct {
-	Type  string                 `json:"type"`
-	Attrs map[string]interface{} `json:"attrs,omitempty"`
+	Type  string         `json:"type"`
+	Attrs map[string]any `json:"attrs,omitempty"`
 }
 
 // adfRenderer は ADF ノードツリーを Markdown に変換する
@@ -259,7 +259,7 @@ func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) st
 func (r *adfRenderer) renderBlockquote(node ADFNode) string {
 	inner := r.renderBlockChildren(node.Content, 0)
 	var sb strings.Builder
-	for _, line := range strings.Split(inner, "\n") {
+	for line := range strings.SplitSeq(inner, "\n") {
 		if line == "" {
 			sb.WriteString(">\n")
 		} else {
@@ -348,7 +348,7 @@ func (r *adfRenderer) renderPanel(node ADFNode) string {
 	inner := r.renderBlockChildren(node.Content, 0)
 	var sb strings.Builder
 	sb.WriteString("> [!" + alertType + "]\n")
-	for _, line := range strings.Split(inner, "\n") {
+	for line := range strings.SplitSeq(inner, "\n") {
 		if line == "" {
 			sb.WriteString(">\n")
 		} else {
