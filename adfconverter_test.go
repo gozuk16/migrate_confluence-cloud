@@ -150,3 +150,96 @@ func TestConvertADF_InternalLink(t *testing.T) {
 
 // adfDoc と adfText は後続タスクのテストでも使われるため、このファイルで宣言する
 var _ = fmt.Sprintf // suppress unused import warning
+
+func TestConvertADF_Heading(t *testing.T) {
+	tests := []struct {
+		level int
+		want  string
+	}{
+		{1, "# Hello"},
+		{2, "## Hello"},
+		{3, "### Hello"},
+		{6, "###### Hello"},
+	}
+	for _, tt := range tests {
+		adf := adfDoc(fmt.Sprintf(`{"type":"heading","attrs":{"level":%d},"content":[{"type":"text","text":"Hello"}]}`, tt.level))
+		got, err := convertADF(adf, nil)
+		if err != nil {
+			t.Fatalf("level %d: unexpected error: %v", tt.level, err)
+		}
+		if strings.TrimSpace(got) != tt.want {
+			t.Errorf("level %d: got %q, want %q", tt.level, strings.TrimSpace(got), tt.want)
+		}
+	}
+}
+
+func TestConvertADF_BulletList(t *testing.T) {
+	adf := adfDoc(`{"type":"bulletList","content":[
+        {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]},
+        {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "- A") || !strings.Contains(got, "- B") {
+		t.Errorf("got %q, want bullet list", got)
+	}
+}
+
+func TestConvertADF_OrderedList(t *testing.T) {
+	adf := adfDoc(`{"type":"orderedList","content":[
+        {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"First"}]}]},
+        {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Second"}]}]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "1. First") || !strings.Contains(got, "2. Second") {
+		t.Errorf("got %q, want ordered list", got)
+	}
+}
+
+func TestConvertADF_NestedBulletList(t *testing.T) {
+	adf := adfDoc(`{"type":"bulletList","content":[
+        {"type":"listItem","content":[
+            {"type":"paragraph","content":[{"type":"text","text":"Parent"}]},
+            {"type":"bulletList","content":[
+                {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"Child"}]}]}
+            ]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "- Parent") {
+		t.Errorf("got %q, want parent item", got)
+	}
+	if !strings.Contains(got, "  - Child") {
+		t.Errorf("got %q, want indented child item", got)
+	}
+}
+
+func TestConvertADF_Blockquote(t *testing.T) {
+	adf := adfDoc(`{"type":"blockquote","content":[{"type":"paragraph","content":[{"type":"text","text":"quoted"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "> quoted") {
+		t.Errorf("got %q, want blockquote", got)
+	}
+}
+
+func TestConvertADF_Rule(t *testing.T) {
+	adf := adfDoc(`{"type":"rule"}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "---") {
+		t.Errorf("got %q, want ---", got)
+	}
+}

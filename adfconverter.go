@@ -52,6 +52,16 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 		return r.renderText(node)
 	case "hardBreak":
 		return "\n"
+	case "heading":
+		return r.renderHeading(node)
+	case "bulletList":
+		return r.renderBulletList(node, indent)
+	case "orderedList":
+		return r.renderOrderedList(node, indent)
+	case "blockquote":
+		return r.renderBlockquote(node)
+	case "rule":
+		return "---"
 	default:
 		return ""
 	}
@@ -150,4 +160,71 @@ func convertInternalURL(rawURL string) string {
 		relPath += "#" + parsed.Fragment
 	}
 	return relPath
+}
+
+func (r *adfRenderer) renderHeading(node ADFNode) string {
+	level := 1
+	if node.Attrs != nil {
+		if l, ok := node.Attrs["level"].(float64); ok {
+			level = int(l)
+		}
+	}
+	prefix := strings.Repeat("#", level)
+	return prefix + " " + r.renderInlineNodes(node.Content)
+}
+
+func (r *adfRenderer) renderBulletList(node ADFNode, indent int) string {
+	var lines []string
+	for _, item := range node.Content {
+		if item.Type == "listItem" {
+			lines = append(lines, r.renderListItem(item, indent, "- "))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (r *adfRenderer) renderOrderedList(node ADFNode, indent int) string {
+	var lines []string
+	for i, item := range node.Content {
+		if item.Type == "listItem" {
+			lines = append(lines, r.renderListItem(item, indent, fmt.Sprintf("%d. ", i+1)))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) string {
+	indentStr := strings.Repeat("  ", indent)
+	var lines []string
+	first := true
+	for _, child := range node.Content {
+		switch child.Type {
+		case "paragraph":
+			text := r.renderInlineNodes(child.Content)
+			if first {
+				lines = append(lines, indentStr+prefix+text)
+				first = false
+			} else {
+				lines = append(lines, indentStr+"  "+text)
+			}
+		case "bulletList":
+			lines = append(lines, r.renderBulletList(child, indent+1))
+		case "orderedList":
+			lines = append(lines, r.renderOrderedList(child, indent+1))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (r *adfRenderer) renderBlockquote(node ADFNode) string {
+	inner := r.renderBlockChildren(node.Content, 0)
+	var sb strings.Builder
+	for _, line := range strings.Split(inner, "\n") {
+		if line == "" {
+			sb.WriteString(">\n")
+		} else {
+			sb.WriteString("> " + line + "\n")
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
 }
