@@ -243,3 +243,86 @@ func TestConvertADF_Rule(t *testing.T) {
 		t.Errorf("got %q, want ---", got)
 	}
 }
+
+func TestConvertADF_CodeBlock(t *testing.T) {
+	adf := adfDoc(`{"type":"codeBlock","attrs":{"language":"go"},"content":[{"type":"text","text":"fmt.Println(\"hello\")"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "```go") {
+		t.Errorf("got %q, want ```go fence", got)
+	}
+	if !strings.Contains(got, `fmt.Println("hello")`) {
+		t.Errorf("got %q, want code content", got)
+	}
+}
+
+func TestConvertADF_CodeBlockNoLanguage(t *testing.T) {
+	adf := adfDoc(`{"type":"codeBlock","content":[{"type":"text","text":"plain code"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "```\n") {
+		t.Errorf("got %q, want ``` fence without language", got)
+	}
+}
+
+func TestConvertADF_PanelInfo(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"paragraph","content":[{"type":"text","text":"note text"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "[!NOTE]") {
+		t.Errorf("got %q, want [!NOTE]", got)
+	}
+	if !strings.Contains(got, "note text") {
+		t.Errorf("got %q, want panel content", got)
+	}
+}
+
+func TestConvertADF_PanelNote(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"note"},"content":[{"type":"paragraph","content":[{"type":"text","text":"warn"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "[!WARNING]") {
+		t.Errorf("got %q, want [!WARNING]", got)
+	}
+}
+
+func TestConvertADF_PanelSuccess(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"success"},"content":[{"type":"paragraph","content":[{"type":"text","text":"tip"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "[!TIP]") {
+		t.Errorf("got %q, want [!TIP]", got)
+	}
+}
+
+func TestConvertADF_PanelWarning(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"warning"},"content":[{"type":"paragraph","content":[{"type":"text","text":"caution"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "[!CAUTION]") {
+		t.Errorf("got %q, want [!CAUTION]", got)
+	}
+}
+
+func TestConvertADF_PanelError(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"error"},"content":[{"type":"paragraph","content":[{"type":"text","text":"err"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "[!CAUTION]") {
+		t.Errorf("got %q, want [!CAUTION] for error panel", got)
+	}
+}

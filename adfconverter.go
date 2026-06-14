@@ -62,6 +62,10 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 		return r.renderBlockquote(node)
 	case "rule":
 		return "---"
+	case "codeBlock":
+		return r.renderCodeBlock(node)
+	case "panel":
+		return r.renderPanel(node)
 	default:
 		return ""
 	}
@@ -219,6 +223,51 @@ func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) st
 func (r *adfRenderer) renderBlockquote(node ADFNode) string {
 	inner := r.renderBlockChildren(node.Content, 0)
 	var sb strings.Builder
+	for _, line := range strings.Split(inner, "\n") {
+		if line == "" {
+			sb.WriteString(">\n")
+		} else {
+			sb.WriteString("> " + line + "\n")
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+func (r *adfRenderer) renderCodeBlock(node ADFNode) string {
+	lang := ""
+	if node.Attrs != nil {
+		if l, ok := node.Attrs["language"].(string); ok {
+			lang = l
+		}
+	}
+	var sb strings.Builder
+	for _, child := range node.Content {
+		if child.Type == "text" {
+			sb.WriteString(child.Text)
+		}
+	}
+	return "```" + lang + "\n" + sb.String() + "\n```"
+}
+
+func (r *adfRenderer) renderPanel(node ADFNode) string {
+	panelType := "info"
+	if node.Attrs != nil {
+		if pt, ok := node.Attrs["panelType"].(string); ok {
+			panelType = pt
+		}
+	}
+	alertType := "NOTE"
+	switch panelType {
+	case "note":
+		alertType = "WARNING"
+	case "warning", "error":
+		alertType = "CAUTION"
+	case "success":
+		alertType = "TIP"
+	}
+	inner := r.renderBlockChildren(node.Content, 0)
+	var sb strings.Builder
+	sb.WriteString("> [!" + alertType + "]\n")
 	for _, line := range strings.Split(inner, "\n") {
 		if line == "" {
 			sb.WriteString(">\n")
