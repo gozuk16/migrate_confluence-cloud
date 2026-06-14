@@ -205,6 +205,11 @@ func (c *Converter) Convert(xhtml string) (string, error) {
 	return strings.TrimSpace(result), nil
 }
 
+// ConvertADF は ADF JSON 文字列を Markdown に変換する（ページ本文用）
+func (c *Converter) ConvertADF(adfJSON string, attachmentMap map[string]string) (string, error) {
+	return convertADF(adfJSON, attachmentMap)
+}
+
 // preprocess はConfluence固有要素を標準HTMLに変換する
 func (c *Converter) preprocess(xhtml string) (string, error) {
 	wrapped := "<html><body>" + xhtml + "</body></html>"

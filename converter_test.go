@@ -342,3 +342,29 @@ func TestEmoticonToEmoji(t *testing.T) {
 		}
 	}
 }
+
+func TestConvertADF_ViaConverter(t *testing.T) {
+	c := newTestConverter()
+	adfJSON := `{"version":1,"type":"doc","content":[{"type":"heading","attrs":{"level":1},"content":[{"type":"text","text":"Title"}]},{"type":"paragraph","content":[{"type":"text","text":"Body"}]}]}`
+	got, err := c.ConvertADF(adfJSON, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "# Title") {
+		t.Errorf("got %q, want heading", got)
+	}
+	if !strings.Contains(got, "Body") {
+		t.Errorf("got %q, want body", got)
+	}
+}
+
+func TestConvertADF_ViaConverterEmpty(t *testing.T) {
+	c := newTestConverter()
+	got, err := c.ConvertADF("", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "" {
+		t.Errorf("got %q, want empty", got)
+	}
+}
