@@ -54,12 +54,13 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 	sb.WriteString(w.generateFrontMatter(page, spaceKey, spaceTitle, parentTitle, labels))
 
 	// ページ本文
-	bodyMarkdown, err := w.converter.Convert(page.Body.Storage.Value)
+	attachmentMap := buildAttachmentMap(attachments)
+	bodyMarkdown, err := w.converter.ConvertADF(page.Body.AtlasDocFormat.Value, attachmentMap)
 	if err != nil {
-		// 変換エラーの場合はXHTMLをコードブロックとして出力
-		sb.WriteString("\n<!-- 変換エラーのため元のXHTMLを表示します -->\n")
-		sb.WriteString("```xml\n")
-		sb.WriteString(page.Body.Storage.Value)
+		// 変換エラーの場合は生 ADF JSON をコードブロックとして出力
+		sb.WriteString("\n<!-- 変換エラーのため元のADF JSONを表示します -->\n")
+		sb.WriteString("```json\n")
+		sb.WriteString(page.Body.AtlasDocFormat.Value)
 		sb.WriteString("\n```\n")
 	} else {
 		sb.WriteString("\n")
@@ -179,4 +180,16 @@ func formatDateForFrontMatter(dateStr string) string {
 		}
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// buildAttachmentMap は添付ファイル一覧から UUID → ファイル名マップを構築する
+func buildAttachmentMap(attachments []Attachment) map[string]string {
+	if len(attachments) == 0 {
+		return nil
+	}
+	m := make(map[string]string, len(attachments))
+	for _, a := range attachments {
+		m[a.ID] = a.Title
+	}
+	return m
 }
