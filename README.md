@@ -11,7 +11,7 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 - スペース単位での一括取得
 - 子ページの再帰的取得
 - 添付ファイルのダウンロード
-- XHTML 中間ファイルの保存と再変換（APIアクセス不要）
+- 中間ファイルの保存と再変換（APIアクセス不要）
 - Hugo Leaf Bundle 形式での出力
 
 ### 変換対応する Confluence 要素
@@ -36,6 +36,8 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 - Go 1.25 以上
 - Atlassian API トークン（[生成ページ](https://id.atlassian.com/manage-profile/security/api-tokens)）
 - `golangci-lint`（`make lint` を使用する場合）
+- `hugo`（Hugo CLI）0.120.0 以上
+- `Node.js` 18 以上（`npx pagefind` を使用する場合）
 
 ## セットアップ
 
@@ -86,8 +88,8 @@ api_token = "your-api-token"
 markdown_dir = "output/markdown"
 # 添付ファイル保存ディレクトリ（空の場合は markdown_dir 内のページディレクトリに配置）
 attachments_dir = ""
-# XHTML 中間ファイル保存ディレクトリ（デフォルト: output/xhtml）
-xhtml_dir = "output/xhtml"
+# 中間ファイル保存ディレクトリ（デフォルト: output/intermediate）
+intermediate_dir = "output/intermediate"
 
 [search]
 # デフォルトのスペースキー（space コマンドでスペースキーを省略した場合に使用）
@@ -111,7 +113,7 @@ ignored_macros = []
 | `confluence` | `api_token` | Atlassian API トークン |
 | `output` | `markdown_dir` | Markdown ファイルの出力先ディレクトリ |
 | `output` | `attachments_dir` | 添付ファイルの保存先（空の場合は Markdown と同じディレクトリ） |
-| `output` | `xhtml_dir` | XHTML 中間ファイルの保存先ディレクトリ |
+| `output` | `intermediate_dir` | 中間ファイルの保存先ディレクトリ |
 | `search` | `default_space_key` | `space` コマンドのデフォルトスペースキー |
 | `display` | `ignored_macros` | 変換時に無視するマクロ名のリスト |
 | `deletedUsers` | `"accountId"` | 削除済みアカウントの表示名マッピング |
@@ -136,7 +138,7 @@ migConfluence page --page-id <ページID> [オプション]
 |---|---|---|
 | `--page-id` | `--id` | 取得するページのID（必須） |
 | `--recursive` | `-r` | 子ページを再帰的に取得する |
-| `--save-xhtml` | — | XHTML 中間ファイルを保存する |
+| `--save-intermediate` | — | 中間ファイルを保存する |
 | `--download-attachments` | — | 添付ファイルをダウンロードする |
 
 **使用例**
@@ -148,8 +150,8 @@ migConfluence page --page-id <ページID> [オプション]
 # 子ページも含めて再帰的に取得
 ./migConfluence page --page-id 123456789 --recursive
 
-# XHTML 中間ファイルも保存しながら変換
-./migConfluence page --page-id 123456789 --save-xhtml
+# 中間ファイルも保存しながら変換
+./migConfluence page --page-id 123456789 --save-intermediate
 
 # 添付ファイルも一緒にダウンロード
 ./migConfluence page --page-id 123456789 --download-attachments
@@ -169,7 +171,7 @@ migConfluence space [--space-key <スペースキー>] [オプション]
 | フラグ | エイリアス | 説明 |
 |---|---|---|
 | `--space-key` | `-k` | 取得するスペースのキー（省略時は設定ファイルの `default_space_key` を使用） |
-| `--save-xhtml` | — | XHTML 中間ファイルを保存する |
+| `--save-intermediate` | — | 中間ファイルを保存する |
 | `--download-attachments` | — | 添付ファイルをダウンロードする |
 
 **使用例**
@@ -181,15 +183,15 @@ migConfluence space [--space-key <スペースキー>] [オプション]
 # 設定ファイルの default_space_key を使用
 ./migConfluence space
 
-# XHTML 保存と添付ファイルダウンロードを同時に実行
-./migConfluence space --space-key MYSPACE --save-xhtml --download-attachments
+# 中間ファイル保存と添付ファイルダウンロードを同時に実行
+./migConfluence space --space-key MYSPACE --save-intermediate --download-attachments
 ```
 
 ---
 
-### `convert` コマンド — 保存済み XHTML からの再変換
+### `convert` コマンド — 保存済み中間ファイルからの再変換
 
-APIアクセスなしに、保存済みの XHTML 中間ファイルから Markdown を再生成します。
+APIアクセスなしに、保存済みの中間ファイルから Markdown を再生成します。
 
 ```bash
 migConfluence convert [--space-key <スペースキー>]
@@ -202,7 +204,7 @@ migConfluence convert [--space-key <スペースキー>]
 **使用例**
 
 ```bash
-# 全スペースの XHTML を再変換
+# 全スペースの中間ファイルを再変換
 ./migConfluence convert
 
 # 特定スペースのみ再変換
@@ -231,16 +233,16 @@ output/markdown/
         └── image.png       # ダウンロードされた添付ファイル（任意）
 ```
 
-### XHTML 中間ファイル（`--save-xhtml` 使用時）
+### 中間ファイル（`--save-intermediate` 使用時）
 
 ```
-output/xhtml/
+output/intermediate/
 └── SPACE_KEY/
     └── PAGE_TITLE/
-        ├── content.xhtml       # Confluence Storage Format
+        ├── content.json        # ADF JSON 形式の中間ファイル
         ├── metadata.toml       # ページメタデータ
         └── comments/           # フッターコメント（任意）
-            ├── comment_001.xhtml
+            ├── comment_001.json
             └── comment_001.toml
 ```
 
@@ -253,6 +255,8 @@ output/xhtml/
 | `make coverage` | テストカバレッジを計測し `coverage.html` を生成 |
 | `make lint` | `golangci-lint` でリントを実行 |
 | `make clean` | ビルド成果物・ログファイルを削除 |
+| `make sync-and-build` | Confluence 同期 → Hugo ビルド → Pagefind インデックス生成 |
+| `make hugo-serve` | Hugo 開発サーバーを起動（ローカル確認用） |
 
 ## ライセンス
 
