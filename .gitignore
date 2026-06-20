@@ -43,3 +43,8 @@ docs/build/
 # Editor/IDE
 # .idea/
 # .vscode/
+.superpowers/
+
+# Hugo ビルド成果物
+hugo-site/public/
+hugo-site/resources/
