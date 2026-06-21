@@ -1,0 +1,15 @@
+<link href="/pagefind/pagefind-ui.css" rel="stylesheet">
+<script src="/pagefind/pagefind-ui.js"></script>
+<div id="pagefind-search" style="padding: 1rem 0;"></div>
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+    new PagefindUI({
+      element: "#pagefind-search",
+      showSubResults: true,
+      translations: {
+        placeholder: "検索...",
+        zero_results: "[SEARCH_TERM] に一致するページが見つかりませんでした"
+      }
+    });
+  });
+</script>

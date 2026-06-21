@@ -1,4 +1,4 @@
-.PHONY: build test coverage lint clean
+.PHONY: build test coverage lint clean sync-and-build hugo-serve
 
 # ビルド
 build:
@@ -28,3 +28,16 @@ lint:
 
 clean:
 	rm -f migConfluence coverage.out coverage.html debug.log
+
+# Hugo サイト: Confluence データ取得 → ビルド → Pagefind インデックス生成
+sync-and-build: build
+	./migConfluence space
+	mkdir -p hugo-site/content
+	cp -r output/markdown/. hugo-site/content/
+	cd hugo-site && hugo --minify
+	npx pagefind --site hugo-site/public
+	@echo "完了: hugo-site/public/ を社内サーバーに配置してください"
+
+# Hugo 開発サーバー（ローカル確認用、Pagefind なし）
+hugo-serve:
+	cd hugo-site && hugo server --bind 0.0.0.0
