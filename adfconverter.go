@@ -491,6 +491,11 @@ func (r *adfRenderer) renderCellBlock(node ADFNode) string {
 		return sb.String()
 	case "panel", "expand", "nestedExpand":
 		return r.renderCellChildren(node.Content)
+	case "extension":
+		if s, ok := r.renderNestedTableHTML(node); ok {
+			return s
+		}
+		return strings.TrimSpace(r.renderNode(node, 0))
 	default:
 		// 未知のブロック要素は通常変換の結果を採用（改行は renderCellContent が <br> 化する）
 		return strings.TrimSpace(r.renderNode(node, 0))
@@ -753,4 +758,78 @@ func (r *adfRenderer) renderEmbedCard(node ADFNode) string {
 		}
 	}
 	return "<!-- embed: " + u + " -->"
+}
+
+// renderNestedTableHTML は nested-table 拡張ノードをセル内 <table> HTML に変換する。
+// nested-table 以外の拡張・parameters.adf の欠落・パース失敗時は false を返す
+// （呼び出し側が通常の extension 処理にフォールバックする）。
+func (r *adfRenderer) renderNestedTableHTML(node ADFNode) (string, bool) {
+	if node.Attrs == nil {
+		return "", false
+	}
+	if k, _ := node.Attrs["extensionKey"].(string); k != "nested-table" {
+		return "", false
+	}
+	params, _ := node.Attrs["parameters"].(map[string]any)
+	if params == nil {
+		return "", false
+	}
+	adfStr, _ := params["adf"].(string)
+	if adfStr == "" {
+		return "", false
+	}
+	var doc ADFNode
+	if err := json.Unmarshal([]byte(adfStr), &doc); err != nil {
+		return "", false
+	}
+	var table *ADFNode
+	if doc.Type == "table" {
+		table = &doc
+	} else {
+		for i := range doc.Content {
+			if doc.Content[i].Type == "table" {
+				table = &doc.Content[i]
+				break
+			}
+		}
+	}
+	if table == nil {
+		return "", false
+	}
+	return r.renderTableInlineHTML(*table), true
+}
+
+// renderTableInlineHTML は table ノードを1行の <table> HTML に変換する。
+// GFM セル内はインライン文脈のため、結合は HTML の colspan/rowspan 属性でそのまま保持できる。
+func (r *adfRenderer) renderTableInlineHTML(node ADFNode) string {
+	var sb strings.Builder
+	sb.WriteString("<table>")
+	for _, row := range node.Content {
+		if row.Type != "tableRow" {
+			continue
+		}
+		sb.WriteString("<tr>")
+		for _, cell := range row.Content {
+			var tag string
+			switch cell.Type {
+			case "tableHeader":
+				tag = "th"
+			case "tableCell":
+				tag = "td"
+			default:
+				continue
+			}
+			attrs := ""
+			if cs := intAttr(cell, "colspan", 1); cs > 1 {
+				attrs += fmt.Sprintf(` colspan="%d"`, cs)
+			}
+			if rs := intAttr(cell, "rowspan", 1); rs > 1 {
+				attrs += fmt.Sprintf(` rowspan="%d"`, rs)
+			}
+			sb.WriteString("<" + tag + attrs + ">" + r.renderCellChildren(cell.Content) + "</" + tag + ">")
+		}
+		sb.WriteString("</tr>")
+	}
+	sb.WriteString("</table>")
+	return sb.String()
 }

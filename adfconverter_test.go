@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -797,5 +798,71 @@ func TestConvertADF_TableAlignment(t *testing.T) {
 	}
 	if !strings.Contains(got, "| ---: | :---: | --- |") {
 		t.Errorf("got %q, want separator '| ---: | :---: | --- |'", got)
+	}
+}
+
+func TestConvertADF_TableNestedTable(t *testing.T) {
+	inner := `{"type":"doc","content":[{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"内側H"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"入れ子"}]}]}
+        ]}
+    ]}]}`
+	quoted, err := json.Marshal(inner)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	ext := `{"type":"extension","attrs":{"extensionType":"com.atlassian.confluence.migration","extensionKey":"nested-table","parameters":{"adf":` + string(quoted) + `}}}`
+	cell := `{"type":"tableCell","content":[` + ext + `]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<table><tr><th>内側H</th></tr><tr><td>入れ子</td></tr></table>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+	if strings.Contains(got, "\n<table>") {
+		t.Errorf("got %q, nested table must be inline (no leading newline)", got)
+	}
+}
+
+func TestConvertADF_TableNestedTableRowspanPreserved(t *testing.T) {
+	// 入れ子テーブル内の結合は HTML 属性としてそのまま保持される
+	inner := `{"type":"doc","content":[{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableCell","attrs":{"colspan":2,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"W"}]}]}
+        ]}
+    ]}]}`
+	quoted, err := json.Marshal(inner)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	ext := `{"type":"extension","attrs":{"extensionKey":"nested-table","parameters":{"adf":` + string(quoted) + `}}}`
+	cell := `{"type":"tableCell","content":[` + ext + `]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, `<td colspan="2">W</td>`) {
+		t.Errorf("got %q, want colspan attribute preserved", got)
+	}
+}
+
+func TestConvertADF_TableNestedTableParseError(t *testing.T) {
+	// parameters.adf が不正 JSON → コメントフォールバック
+	ext := `{"type":"extension","attrs":{"extensionKey":"nested-table","parameters":{"adf":"not json"}}}`
+	cell := `{"type":"tableCell","content":[` + ext + `]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "<!-- macro: nested-table -->") {
+		t.Errorf("got %q, want comment fallback", got)
 	}
 }
