@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added（ADFテーブル変換強化）
+- テーブルセル内のリスト・引用・複数段落・コードブロック・タスクリストを HTML 埋め込みで変換
+- テーブルの縦結合（rowspan）・横結合（colspan）をグリッド展開で近似（列ずれ解消）
+- 入れ子テーブル（nested-table 拡張）をセル内 HTML テーブルとして再帰変換
+- セルの配置（alignment マーク）を GFM 列アライメント記法に反映
+- ヘッダー無しテーブルに空ヘッダー行を自動生成
+
 ### Changed（ADF移行）
 - ページ取得フォーマットを `body-format=storage`（独自 XHTML）から `body-format=atlas_doc_format`（ADF JSON）に移行
 - 中間ファイルを `content.xhtml` から `content.json`（ADF JSON）に変更
