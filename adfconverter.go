@@ -799,36 +799,69 @@ func (r *adfRenderer) renderNestedTableHTML(node ADFNode) (string, bool) {
 	return r.renderTableInlineHTML(*table), true
 }
 
-// renderTableInlineHTML は table ノードを1行の <table> HTML に変換する。
-// GFM セル内はインライン文脈のため、結合は HTML の colspan/rowspan 属性でそのまま保持できる。
-func (r *adfRenderer) renderTableInlineHTML(node ADFNode) string {
+// renderTableRowHTML は tableRow ノードを1行の <tr> HTML に変換する
+func (r *adfRenderer) renderTableRowHTML(row ADFNode) string {
 	var sb strings.Builder
-	sb.WriteString("<table>")
-	for _, row := range node.Content {
-		if row.Type != "tableRow" {
+	sb.WriteString("<tr>")
+	for _, cell := range row.Content {
+		var tag string
+		switch cell.Type {
+		case "tableHeader":
+			tag = "th"
+		case "tableCell":
+			tag = "td"
+		default:
 			continue
 		}
-		sb.WriteString("<tr>")
-		for _, cell := range row.Content {
-			var tag string
-			switch cell.Type {
-			case "tableHeader":
-				tag = "th"
-			case "tableCell":
-				tag = "td"
-			default:
-				continue
-			}
-			attrs := ""
-			if cs := intAttr(cell, "colspan", 1); cs > 1 {
-				attrs += fmt.Sprintf(` colspan="%d"`, cs)
-			}
-			if rs := intAttr(cell, "rowspan", 1); rs > 1 {
-				attrs += fmt.Sprintf(` rowspan="%d"`, rs)
-			}
-			sb.WriteString("<" + tag + attrs + ">" + r.renderCellChildren(cell.Content) + "</" + tag + ">")
+		attrs := ""
+		if cs := intAttr(cell, "colspan", 1); cs > 1 {
+			attrs += fmt.Sprintf(` colspan="%d"`, cs)
 		}
-		sb.WriteString("</tr>")
+		if rs := intAttr(cell, "rowspan", 1); rs > 1 {
+			attrs += fmt.Sprintf(` rowspan="%d"`, rs)
+		}
+		sb.WriteString("<" + tag + attrs + ">" + r.renderCellChildren(cell.Content) + "</" + tag + ">")
+	}
+	sb.WriteString("</tr>")
+	return sb.String()
+}
+
+// renderTableInlineHTML は table ノードを1行の <table> HTML に変換する。
+// GFM セル内はインライン文脈のため、結合は HTML の colspan/rowspan 属性でそのまま保持できる。
+// ヘッダー行は <thead>、それ以外は <tbody> で明示的に囲む必要がある。
+// これを省略すると、ブラウザが全 <tr> を1つの暗黙 <tbody> にまとめてしまい、
+// ゼブラストライプ用CSS（tr:nth-child(2n) 等）がヘッダー行を数に含めてしまうため、
+// データ行の縞模様がヘッダー行1つ分ずれて誤って着色される。
+func (r *adfRenderer) renderTableInlineHTML(node ADFNode) string {
+	rows := make([]ADFNode, 0, len(node.Content))
+	for _, row := range node.Content {
+		if row.Type == "tableRow" {
+			rows = append(rows, row)
+		}
+	}
+
+	hasHeader := false
+	if len(rows) > 0 {
+		for _, cell := range rows[0].Content {
+			if cell.Type == "tableHeader" {
+				hasHeader = true
+				break
+			}
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("<table>")
+	if hasHeader {
+		sb.WriteString("<thead>" + r.renderTableRowHTML(rows[0]) + "</thead>")
+		rows = rows[1:]
+	}
+	if len(rows) > 0 {
+		sb.WriteString("<tbody>")
+		for _, row := range rows {
+			sb.WriteString(r.renderTableRowHTML(row))
+		}
+		sb.WriteString("</tbody>")
 	}
 	sb.WriteString("</table>")
 	return sb.String()

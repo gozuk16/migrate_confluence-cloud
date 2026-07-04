@@ -821,12 +821,50 @@ func TestConvertADF_TableNestedTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := "<table><tr><th>内側H</th></tr><tr><td>入れ子</td></tr></table>"
+	want := "<table><thead><tr><th>内側H</th></tr></thead><tbody><tr><td>入れ子</td></tr></tbody></table>"
 	if !strings.Contains(got, want) {
 		t.Errorf("got %q, want to contain %q", got, want)
 	}
 	if strings.Contains(got, "\n<table>") {
 		t.Errorf("got %q, nested table must be inline (no leading newline)", got)
+	}
+}
+
+func TestConvertADF_TableNestedTableTheadTbody(t *testing.T) {
+	// thead/tbody を省略すると、ブラウザが全行を1つの tbody にまとめてしまい、
+	// ゼブラストライプ用CSS（tr:nth-child(2n)）がヘッダー行を数に含めてしまうため、
+	// データ行の縞模様がヘッダー行1つ分ずれて誤って着色される（実際に発生した不具合）。
+	// 外側テーブル（renderTable）と同様に thead/tbody で構造を分離し、
+	// ブラウザによる暗黙のtbody統合を防ぐ。
+	inner := `{"type":"doc","content":[{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H1"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H2"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]},
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"C"}]}]},
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"D"}]}]}
+        ]}
+    ]}]}`
+	quoted, err := json.Marshal(inner)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	ext := `{"type":"extension","attrs":{"extensionKey":"nested-table","parameters":{"adf":` + string(quoted) + `}}}`
+	cell := `{"type":"tableCell","content":[` + ext + `]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<table><thead><tr><th>H1</th><th>H2</th></tr></thead>" +
+		"<tbody><tr><td>A</td><td>B</td></tr><tr><td>C</td><td>D</td></tr></tbody></table>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
 	}
 }
 
