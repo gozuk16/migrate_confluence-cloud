@@ -302,6 +302,23 @@ func intAttr(node ADFNode, key string, defaultVal int) int {
 	return defaultVal
 }
 
+// cellAlignment はセル内段落の alignment マークから配置を返す（"" / "center" / "end"）
+func cellAlignment(cell ADFNode) string {
+	for _, child := range cell.Content {
+		if child.Type != "paragraph" {
+			continue
+		}
+		for _, m := range child.Marks {
+			if m.Type == "alignment" && m.Attrs != nil {
+				if a, ok := m.Attrs["align"].(string); ok {
+					return a
+				}
+			}
+		}
+	}
+	return ""
+}
+
 func (r *adfRenderer) renderTable(node ADFNode) string {
 	adfRows := make([]ADFNode, 0, len(node.Content))
 	for _, row := range node.Content {
@@ -351,7 +368,10 @@ func (r *adfRenderer) renderTable(node ADFNode) string {
 					grid[ri+dr][col+dc] = &tableCellData{}
 				}
 			}
-			grid[ri][col] = &tableCellData{content: r.renderCellContent(cell)}
+			grid[ri][col] = &tableCellData{
+				content: r.renderCellContent(cell),
+				align:   cellAlignment(cell),
+			}
 			col += colspan
 		}
 	}
@@ -364,6 +384,16 @@ func (r *adfRenderer) renderTable(node ADFNode) string {
 	}
 	if width == 0 {
 		return ""
+	}
+
+	colAligns := make([]string, width)
+	for i := 0; i < width; i++ {
+		for _, row := range grid {
+			if i < len(row) && row[i] != nil && row[i].align != "" {
+				colAligns[i] = row[i].align
+				break
+			}
+		}
 	}
 
 	var sb strings.Builder
@@ -381,7 +411,14 @@ func (r *adfRenderer) renderTable(node ADFNode) string {
 	writeSeparator := func() {
 		sb.WriteString("|")
 		for i := 0; i < width; i++ {
-			sb.WriteString(" --- |")
+			switch colAligns[i] {
+			case "center":
+				sb.WriteString(" :---: |")
+			case "end":
+				sb.WriteString(" ---: |")
+			default:
+				sb.WriteString(" --- |")
+			}
 		}
 		sb.WriteString("\n")
 	}

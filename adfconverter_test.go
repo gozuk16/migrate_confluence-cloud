@@ -776,3 +776,26 @@ func TestConvertADF_TableRowspanColspanMixed(t *testing.T) {
 		t.Errorf("got %q, want row3 with padded cells", got)
 	}
 }
+
+func TestConvertADF_TableAlignment(t *testing.T) {
+	// 1列目: align=end, 2列目: align=center, 3列目: 指定なし
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H1"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H2"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H3"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"end"}}],"content":[{"type":"text","text":"122"}]}]},
+            {"type":"tableCell","content":[{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"center"}}],"content":[{"type":"text","text":"mid"}]}]},
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"plain"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "| ---: | :---: | --- |") {
+		t.Errorf("got %q, want separator '| ---: | :---: | --- |'", got)
+	}
+}
