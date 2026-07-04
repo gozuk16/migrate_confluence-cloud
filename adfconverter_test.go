@@ -671,3 +671,108 @@ func TestConvertADF_TableCellPipeEscape(t *testing.T) {
 		t.Errorf("got %q, want escaped pipe", got)
 	}
 }
+
+func TestConvertADF_TableRowspan(t *testing.T) {
+	// 2列テーブル: 1行目 A(rowspan=2), B / 2行目 C のみ
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":2},"content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]},
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"C"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "| A | B |") {
+		t.Errorf("got %q, want first data row '| A | B |'", got)
+	}
+	// rowspan で占有された位置は空セルになり、C は2列目に配置される
+	if !strings.Contains(got, "|  | C |") {
+		t.Errorf("got %q, want second data row '|  | C |'", got)
+	}
+}
+
+func TestConvertADF_TableColspan(t *testing.T) {
+	// 2列テーブル: 2行目 D(colspan=2)
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H1"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H2"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","attrs":{"colspan":2,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"D"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// colspan の残り位置は空セルで埋める
+	if !strings.Contains(got, "| D |  |") {
+		t.Errorf("got %q, want data row '| D |  |'", got)
+	}
+}
+
+func TestConvertADF_TableNoHeader(t *testing.T) {
+	// 1行目が tableCell のみ → 空ヘッダー行を自動生成し、1行目はデータ行として出力
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"A"}]}]},
+            {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"B"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	lines := strings.Split(got, "\n")
+	if len(lines) < 3 {
+		t.Fatalf("got %q, want 3 lines (empty header, separator, data)", got)
+	}
+	if lines[0] != "|  |  |" {
+		t.Errorf("got %q, want empty header row '|  |  |'", lines[0])
+	}
+	if lines[1] != "| --- | --- |" {
+		t.Errorf("got %q, want separator row", lines[1])
+	}
+	if lines[2] != "| A | B |" {
+		t.Errorf("got %q, want data row '| A | B |'", lines[2])
+	}
+}
+
+func TestConvertADF_TableRowspanColspanMixed(t *testing.T) {
+	// SCRUM サンプル相当: 4列、2行目に rowspan=2 / 3行目に colspan=2 が混在
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H1"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H2"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H3"}]}]},
+            {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"H4"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"a"}]}]},
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":2},"content":[{"type":"paragraph","content":[{"type":"text","text":"縦結合"}]}]},
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"b"}]}]},
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"c"}]}]}
+        ]},
+        {"type":"tableRow","content":[
+            {"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"d"}]}]},
+            {"type":"tableCell","attrs":{"colspan":2,"rowspan":1},"content":[{"type":"paragraph","content":[{"type":"text","text":"横結合"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "| a | 縦結合 | b | c |") {
+		t.Errorf("got %q, want row2", got)
+	}
+	// 3行目: d, (縦結合の占有=空), 横結合, (colspanの占有=空)
+	if !strings.Contains(got, "| d |  | 横結合 |  |") {
+		t.Errorf("got %q, want row3 with padded cells", got)
+	}
+}

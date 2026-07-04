@@ -286,33 +286,118 @@ func (r *adfRenderer) renderCodeBlock(node ADFNode) string {
 	return "```" + lang + "\n" + sb.String() + "\n```"
 }
 
+// tableCellData はグリッド展開後のセル情報
+type tableCellData struct {
+	content string
+	align   string // "": 未指定, "center": 中央, "end": 右寄せ
+}
+
+// intAttr は attrs から正の整数属性を取得する（欠落・非数値・0以下は defaultVal）
+func intAttr(node ADFNode, key string, defaultVal int) int {
+	if node.Attrs != nil {
+		if v, ok := node.Attrs[key].(float64); ok && int(v) > 0 {
+			return int(v)
+		}
+	}
+	return defaultVal
+}
+
 func (r *adfRenderer) renderTable(node ADFNode) string {
-	var sb strings.Builder
-	firstRow := true
-	var colCount int
+	adfRows := make([]ADFNode, 0, len(node.Content))
 	for _, row := range node.Content {
-		if row.Type != "tableRow" {
-			continue
+		if row.Type == "tableRow" {
+			adfRows = append(adfRows, row)
 		}
-		if firstRow {
-			colCount = len(row.Content)
+	}
+	if len(adfRows) == 0 {
+		return ""
+	}
+
+	// 1行目に tableHeader が1つでもあればヘッダー行とみなす
+	hasHeader := false
+	for _, cell := range adfRows[0].Content {
+		if cell.Type == "tableHeader" {
+			hasHeader = true
+			break
 		}
-		sb.WriteString("|")
+	}
+
+	// 仮想グリッド展開: rowspan/colspan の占有位置を空セルで確保して列ずれを防ぐ
+	var grid [][]*tableCellData
+	ensureCell := func(row, col int) {
+		for len(grid) <= row {
+			grid = append(grid, nil)
+		}
+		for len(grid[row]) <= col {
+			grid[row] = append(grid[row], nil)
+		}
+	}
+	for ri, row := range adfRows {
+		col := 0
 		for _, cell := range row.Content {
-			cellText := r.renderCellContent(cell)
-			sb.WriteString(" " + cellText + " |")
+			if cell.Type != "tableCell" && cell.Type != "tableHeader" {
+				continue
+			}
+			ensureCell(ri, col)
+			for grid[ri][col] != nil {
+				col++
+				ensureCell(ri, col)
+			}
+			colspan := intAttr(cell, "colspan", 1)
+			rowspan := intAttr(cell, "rowspan", 1)
+			for dr := 0; dr < rowspan; dr++ {
+				for dc := 0; dc < colspan; dc++ {
+					ensureCell(ri+dr, col+dc)
+					grid[ri+dr][col+dc] = &tableCellData{}
+				}
+			}
+			grid[ri][col] = &tableCellData{content: r.renderCellContent(cell)}
+			col += colspan
+		}
+	}
+
+	width := 0
+	for _, row := range grid {
+		if len(row) > width {
+			width = len(row)
+		}
+	}
+	if width == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	writeRow := func(row []*tableCellData) {
+		sb.WriteString("|")
+		for i := 0; i < width; i++ {
+			content := ""
+			if i < len(row) && row[i] != nil {
+				content = row[i].content
+			}
+			sb.WriteString(" " + content + " |")
 		}
 		sb.WriteString("\n")
-		if firstRow && colCount > 0 {
-			sb.WriteString("|")
-			for i := 0; i < colCount; i++ {
-				sb.WriteString(" --- |")
-			}
-			sb.WriteString("\n")
-			firstRow = false
-		} else {
-			firstRow = false
+	}
+	writeSeparator := func() {
+		sb.WriteString("|")
+		for i := 0; i < width; i++ {
+			sb.WriteString(" --- |")
 		}
+		sb.WriteString("\n")
+	}
+
+	rows := grid
+	if hasHeader {
+		writeRow(rows[0])
+		writeSeparator()
+		rows = rows[1:]
+	} else {
+		// ヘッダー無しテーブル: 空ヘッダー行を自動生成する
+		writeRow(nil)
+		writeSeparator()
+	}
+	for _, row := range rows {
+		writeRow(row)
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
