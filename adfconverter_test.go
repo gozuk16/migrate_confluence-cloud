@@ -545,3 +545,129 @@ func TestConvertADF_InlineCard(t *testing.T) {
 		t.Errorf("got %q, want URL", got)
 	}
 }
+
+func TestConvertADF_TableCellBulletList(t *testing.T) {
+	// 3階層の入れ子リストを持つセル
+	cell := `{"type":"tableCell","attrs":{"colspan":1,"rowspan":1},"content":[
+        {"type":"bulletList","content":[
+            {"type":"listItem","content":[
+                {"type":"paragraph","content":[{"type":"text","text":"a"}]},
+                {"type":"bulletList","content":[
+                    {"type":"listItem","content":[
+                        {"type":"paragraph","content":[{"type":"text","text":"b"}]},
+                        {"type":"bulletList","content":[
+                            {"type":"listItem","content":[
+                                {"type":"paragraph","content":[{"type":"text","text":"c"}]}
+                            ]}
+                        ]}
+                    ]}
+                ]}
+            ]}
+        ]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+func TestConvertADF_TableCellOrderedList(t *testing.T) {
+	cell := `{"type":"tableCell","content":[
+        {"type":"orderedList","content":[
+            {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"one"}]}]},
+            {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"two"}]}]}
+        ]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<ol><li>one</li><li>two</li></ol>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+func TestConvertADF_TableCellBlockquote(t *testing.T) {
+	cell := `{"type":"tableCell","content":[
+        {"type":"blockquote","content":[{"type":"paragraph","content":[{"type":"text","text":"引用"}]}]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<blockquote>引用</blockquote>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+func TestConvertADF_TableCellMultiParagraph(t *testing.T) {
+	cell := `{"type":"tableCell","content":[
+        {"type":"paragraph","content":[{"type":"text","text":"1行目"}]},
+        {"type":"paragraph","content":[{"type":"text","text":"2行目"}]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "1行目<br>2行目"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+func TestConvertADF_TableCellCodeBlock(t *testing.T) {
+	cell := `{"type":"tableCell","content":[
+        {"type":"codeBlock","attrs":{"language":"go"},"content":[{"type":"text","text":"a < b\nc"}]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<code>a &lt; b<br>c</code>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+func TestConvertADF_TableCellTaskList(t *testing.T) {
+	cell := `{"type":"tableCell","content":[
+        {"type":"taskList","content":[
+            {"type":"taskItem","attrs":{"state":"DONE"},"content":[{"type":"text","text":"done"}]},
+            {"type":"taskItem","attrs":{"state":"TODO"},"content":[{"type":"text","text":"todo"}]}
+        ]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<ul><li>☑ done</li><li>☐ todo</li></ul>"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+func TestConvertADF_TableCellPipeEscape(t *testing.T) {
+	cell := `{"type":"tableCell","content":[
+        {"type":"paragraph","content":[{"type":"text","text":"a|b"}]}
+    ]}`
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` + cell + `]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, `a\|b`) {
+		t.Errorf("got %q, want escaped pipe", got)
+	}
+}

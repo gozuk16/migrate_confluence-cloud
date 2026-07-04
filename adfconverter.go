@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -298,7 +299,7 @@ func (r *adfRenderer) renderTable(node ADFNode) string {
 		}
 		sb.WriteString("|")
 		for _, cell := range row.Content {
-			cellText := r.renderTableCell(cell)
+			cellText := r.renderCellContent(cell)
 			sb.WriteString(" " + cellText + " |")
 		}
 		sb.WriteString("\n")
@@ -316,17 +317,100 @@ func (r *adfRenderer) renderTable(node ADFNode) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func (r *adfRenderer) renderTableCell(node ADFNode) string {
+// renderCellContent はセル内のブロック要素群を GFM セル用の1行文字列に変換する。
+// GFM で表現できないブロック要素はセル内 HTML として埋め込む（migrate_jira-cloud 方式）。
+func (r *adfRenderer) renderCellContent(cell ADFNode) string {
 	var parts []string
-	for _, child := range node.Content {
-		text := strings.TrimSpace(r.renderNode(child, 0))
-		text = strings.ReplaceAll(text, "\n", " ")
-		text = strings.ReplaceAll(text, "|", "\\|")
-		if text != "" {
-			parts = append(parts, text)
+	for _, child := range cell.Content {
+		if s := r.renderCellBlock(child); s != "" {
+			parts = append(parts, s)
 		}
 	}
-	return strings.Join(parts, " ")
+	joined := strings.Join(parts, "<br>")
+	// hardBreak 等が残した改行をすべて <br> に置換してから | をエスケープする
+	joined = strings.ReplaceAll(joined, "\n", "<br>")
+	return strings.ReplaceAll(joined, "|", "\\|")
+}
+
+// renderCellBlock はセル内の1ブロック要素を改行なしの文字列に変換する
+func (r *adfRenderer) renderCellBlock(node ADFNode) string {
+	switch node.Type {
+	case "paragraph":
+		return r.renderInlineNodes(node.Content)
+	case "bulletList", "orderedList":
+		return r.renderCellListHTML(node)
+	case "blockquote":
+		return "<blockquote>" + r.renderCellChildren(node.Content) + "</blockquote>"
+	case "codeBlock":
+		var sb strings.Builder
+		for _, child := range node.Content {
+			if child.Type == "text" {
+				sb.WriteString(child.Text)
+			}
+		}
+		code := html.EscapeString(sb.String())
+		return "<code>" + strings.ReplaceAll(code, "\n", "<br>") + "</code>"
+	case "taskList":
+		var sb strings.Builder
+		sb.WriteString("<ul>")
+		for _, item := range node.Content {
+			if item.Type != "taskItem" {
+				continue
+			}
+			check := "☐ "
+			if item.Attrs != nil {
+				if s, ok := item.Attrs["state"].(string); ok && s == "DONE" {
+					check = "☑ "
+				}
+			}
+			sb.WriteString("<li>" + check + r.renderInlineNodes(item.Content) + "</li>")
+		}
+		sb.WriteString("</ul>")
+		return sb.String()
+	case "panel", "expand", "nestedExpand":
+		return r.renderCellChildren(node.Content)
+	default:
+		// 未知のブロック要素は通常変換の結果を採用（改行は renderCellContent が <br> 化する）
+		return strings.TrimSpace(r.renderNode(node, 0))
+	}
+}
+
+// renderCellChildren は子ブロック要素群を <br> 区切りで結合する
+func (r *adfRenderer) renderCellChildren(nodes []ADFNode) string {
+	var parts []string
+	for _, child := range nodes {
+		if s := r.renderCellBlock(child); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, "<br>")
+}
+
+// renderCellListHTML は bulletList / orderedList をセル内 HTML リストに変換する
+func (r *adfRenderer) renderCellListHTML(node ADFNode) string {
+	tag := "ul"
+	if node.Type == "orderedList" {
+		tag = "ol"
+	}
+	var sb strings.Builder
+	sb.WriteString("<" + tag + ">")
+	for _, item := range node.Content {
+		if item.Type != "listItem" {
+			continue
+		}
+		sb.WriteString("<li>")
+		for _, child := range item.Content {
+			switch child.Type {
+			case "paragraph":
+				sb.WriteString(r.renderInlineNodes(child.Content))
+			case "bulletList", "orderedList":
+				sb.WriteString(r.renderCellListHTML(child))
+			}
+		}
+		sb.WriteString("</li>")
+	}
+	sb.WriteString("</" + tag + ">")
+	return sb.String()
 }
 
 func (r *adfRenderer) renderPanel(node ADFNode) string {
