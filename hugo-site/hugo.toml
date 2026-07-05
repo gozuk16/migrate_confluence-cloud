@@ -1,7 +1,7 @@
 baseURL = "/"
 languageCode = "ja"
 title = "社内ドキュメント"
-theme = "hugo-book"
+theme = "hugo-theme-docs"
 
 [params]
   # Hugo Book 組み込み検索を無効化（Pagefind を使うため）
