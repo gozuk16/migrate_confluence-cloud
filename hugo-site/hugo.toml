@@ -1,20 +1,7 @@
 baseURL = "/"
-languageCode = "ja"
+locale = "ja"
 title = "社内ドキュメント"
-theme = "hugo-book"
-
-[params]
-  # Hugo Book 組み込み検索を無効化（Pagefind を使うため）
-  BookSearch = false
-  # 右サイドバーに目次を表示
-  BookToC = true
-  # ディレクトリ構造をサイドバーナビに使用
-  BookMenuBundle = false
-  # 日付フォーマット
-  BookDateFormat = "2006-01-02"
-  # コンテンツのルートセクション（デフォルトは "docs"、Task 2 以降は "docs" に変更予定）
-  BookSection = "sample"
+theme = "hugo-theme-docs"
 
 [markup.goldmark.renderer]
-  # HTML タグ（<details> など）を Markdown 内で使えるようにする
   unsafe = true
