@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -285,48 +286,258 @@ func (r *adfRenderer) renderCodeBlock(node ADFNode) string {
 	return "```" + lang + "\n" + sb.String() + "\n```"
 }
 
-func (r *adfRenderer) renderTable(node ADFNode) string {
-	var sb strings.Builder
-	firstRow := true
-	var colCount int
-	for _, row := range node.Content {
-		if row.Type != "tableRow" {
+// tableCellData はグリッド展開後のセル情報
+type tableCellData struct {
+	content string
+	align   string // "": 未指定, "center": 中央, "end": 右寄せ
+}
+
+// intAttr は attrs から正の整数属性を取得する（欠落・非数値・0以下は defaultVal）
+func intAttr(node ADFNode, key string, defaultVal int) int {
+	if node.Attrs != nil {
+		if v, ok := node.Attrs[key].(float64); ok && int(v) > 0 {
+			return int(v)
+		}
+	}
+	return defaultVal
+}
+
+// cellAlignment はセル内段落の alignment マークから配置を返す（"" / "center" / "end"）
+func cellAlignment(cell ADFNode) string {
+	for _, child := range cell.Content {
+		if child.Type != "paragraph" {
 			continue
 		}
-		if firstRow {
-			colCount = len(row.Content)
+		for _, m := range child.Marks {
+			if m.Type == "alignment" && m.Attrs != nil {
+				if a, ok := m.Attrs["align"].(string); ok {
+					return a
+				}
+			}
 		}
-		sb.WriteString("|")
+	}
+	return ""
+}
+
+func (r *adfRenderer) renderTable(node ADFNode) string {
+	adfRows := make([]ADFNode, 0, len(node.Content))
+	for _, row := range node.Content {
+		if row.Type == "tableRow" {
+			adfRows = append(adfRows, row)
+		}
+	}
+	if len(adfRows) == 0 {
+		return ""
+	}
+
+	// 1行目に tableHeader が1つでもあればヘッダー行とみなす
+	hasHeader := false
+	for _, cell := range adfRows[0].Content {
+		if cell.Type == "tableHeader" {
+			hasHeader = true
+			break
+		}
+	}
+
+	// 仮想グリッド展開: rowspan/colspan の占有位置を空セルで確保して列ずれを防ぐ
+	var grid [][]*tableCellData
+	ensureCell := func(row, col int) {
+		for len(grid) <= row {
+			grid = append(grid, nil)
+		}
+		for len(grid[row]) <= col {
+			grid[row] = append(grid[row], nil)
+		}
+	}
+	for ri, row := range adfRows {
+		col := 0
 		for _, cell := range row.Content {
-			cellText := r.renderTableCell(cell)
-			sb.WriteString(" " + cellText + " |")
+			if cell.Type != "tableCell" && cell.Type != "tableHeader" {
+				continue
+			}
+			ensureCell(ri, col)
+			for grid[ri][col] != nil {
+				col++
+				ensureCell(ri, col)
+			}
+			colspan := intAttr(cell, "colspan", 1)
+			rowspan := intAttr(cell, "rowspan", 1)
+			for dr := 0; dr < rowspan; dr++ {
+				for dc := 0; dc < colspan; dc++ {
+					ensureCell(ri+dr, col+dc)
+					grid[ri+dr][col+dc] = &tableCellData{}
+				}
+			}
+			grid[ri][col] = &tableCellData{
+				content: r.renderCellContent(cell),
+				align:   cellAlignment(cell),
+			}
+			col += colspan
+		}
+	}
+
+	width := 0
+	for _, row := range grid {
+		if len(row) > width {
+			width = len(row)
+		}
+	}
+	if width == 0 {
+		return ""
+	}
+
+	colAligns := make([]string, width)
+	for i := 0; i < width; i++ {
+		for _, row := range grid {
+			if i < len(row) && row[i] != nil && row[i].align != "" {
+				colAligns[i] = row[i].align
+				break
+			}
+		}
+	}
+
+	var sb strings.Builder
+	writeRow := func(row []*tableCellData) {
+		sb.WriteString("|")
+		for i := 0; i < width; i++ {
+			content := ""
+			if i < len(row) && row[i] != nil {
+				content = row[i].content
+			}
+			sb.WriteString(" " + content + " |")
 		}
 		sb.WriteString("\n")
-		if firstRow && colCount > 0 {
-			sb.WriteString("|")
-			for i := 0; i < colCount; i++ {
+	}
+	writeSeparator := func() {
+		sb.WriteString("|")
+		for i := 0; i < width; i++ {
+			switch colAligns[i] {
+			case "center":
+				sb.WriteString(" :---: |")
+			case "end":
+				sb.WriteString(" ---: |")
+			default:
 				sb.WriteString(" --- |")
 			}
-			sb.WriteString("\n")
-			firstRow = false
-		} else {
-			firstRow = false
 		}
+		sb.WriteString("\n")
+	}
+
+	rows := grid
+	if hasHeader {
+		writeRow(rows[0])
+		writeSeparator()
+		rows = rows[1:]
+	} else {
+		// ヘッダー無しテーブル: 空ヘッダー行を自動生成する
+		writeRow(nil)
+		writeSeparator()
+	}
+	for _, row := range rows {
+		writeRow(row)
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func (r *adfRenderer) renderTableCell(node ADFNode) string {
+// renderCellContent はセル内のブロック要素群を GFM セル用の1行文字列に変換する。
+// GFM で表現できないブロック要素はセル内 HTML として埋め込む（migrate_jira-cloud 方式）。
+func (r *adfRenderer) renderCellContent(cell ADFNode) string {
 	var parts []string
-	for _, child := range node.Content {
-		text := strings.TrimSpace(r.renderNode(child, 0))
-		text = strings.ReplaceAll(text, "\n", " ")
-		text = strings.ReplaceAll(text, "|", "\\|")
-		if text != "" {
-			parts = append(parts, text)
+	for _, child := range cell.Content {
+		if s := r.renderCellBlock(child); s != "" {
+			parts = append(parts, s)
 		}
 	}
-	return strings.Join(parts, " ")
+	joined := strings.Join(parts, "<br>")
+	// hardBreak 等が残した改行をすべて <br> に置換してから | をエスケープする
+	joined = strings.ReplaceAll(joined, "\n", "<br>")
+	return strings.ReplaceAll(joined, "|", "\\|")
+}
+
+// renderCellBlock はセル内の1ブロック要素を改行なしの文字列に変換する
+func (r *adfRenderer) renderCellBlock(node ADFNode) string {
+	switch node.Type {
+	case "paragraph":
+		return r.renderInlineNodes(node.Content)
+	case "bulletList", "orderedList":
+		return r.renderCellListHTML(node)
+	case "blockquote":
+		return "<blockquote>" + r.renderCellChildren(node.Content) + "</blockquote>"
+	case "codeBlock":
+		var sb strings.Builder
+		for _, child := range node.Content {
+			if child.Type == "text" {
+				sb.WriteString(child.Text)
+			}
+		}
+		code := html.EscapeString(sb.String())
+		return "<code>" + strings.ReplaceAll(code, "\n", "<br>") + "</code>"
+	case "taskList":
+		var sb strings.Builder
+		sb.WriteString("<ul>")
+		for _, item := range node.Content {
+			if item.Type != "taskItem" {
+				continue
+			}
+			check := "☐ "
+			if item.Attrs != nil {
+				if s, ok := item.Attrs["state"].(string); ok && s == "DONE" {
+					check = "☑ "
+				}
+			}
+			sb.WriteString("<li>" + check + r.renderInlineNodes(item.Content) + "</li>")
+		}
+		sb.WriteString("</ul>")
+		return sb.String()
+	case "panel", "expand", "nestedExpand":
+		return r.renderCellChildren(node.Content)
+	case "extension":
+		if s, ok := r.renderNestedTableHTML(node); ok {
+			return s
+		}
+		return strings.TrimSpace(r.renderNode(node, 0))
+	default:
+		// 未知のブロック要素は通常変換の結果を採用（改行は renderCellContent が <br> 化する）
+		return strings.TrimSpace(r.renderNode(node, 0))
+	}
+}
+
+// renderCellChildren は子ブロック要素群を <br> 区切りで結合する
+func (r *adfRenderer) renderCellChildren(nodes []ADFNode) string {
+	var parts []string
+	for _, child := range nodes {
+		if s := r.renderCellBlock(child); s != "" {
+			parts = append(parts, s)
+		}
+	}
+	return strings.Join(parts, "<br>")
+}
+
+// renderCellListHTML は bulletList / orderedList をセル内 HTML リストに変換する
+func (r *adfRenderer) renderCellListHTML(node ADFNode) string {
+	tag := "ul"
+	if node.Type == "orderedList" {
+		tag = "ol"
+	}
+	var sb strings.Builder
+	sb.WriteString("<" + tag + ">")
+	for _, item := range node.Content {
+		if item.Type != "listItem" {
+			continue
+		}
+		sb.WriteString("<li>")
+		for _, child := range item.Content {
+			switch child.Type {
+			case "paragraph":
+				sb.WriteString(r.renderInlineNodes(child.Content))
+			case "bulletList", "orderedList":
+				sb.WriteString(r.renderCellListHTML(child))
+			}
+		}
+		sb.WriteString("</li>")
+	}
+	sb.WriteString("</" + tag + ">")
+	return sb.String()
 }
 
 func (r *adfRenderer) renderPanel(node ADFNode) string {
@@ -547,4 +758,111 @@ func (r *adfRenderer) renderEmbedCard(node ADFNode) string {
 		}
 	}
 	return "<!-- embed: " + u + " -->"
+}
+
+// renderNestedTableHTML は nested-table 拡張ノードをセル内 <table> HTML に変換する。
+// nested-table 以外の拡張・parameters.adf の欠落・パース失敗時は false を返す
+// （呼び出し側が通常の extension 処理にフォールバックする）。
+func (r *adfRenderer) renderNestedTableHTML(node ADFNode) (string, bool) {
+	if node.Attrs == nil {
+		return "", false
+	}
+	if k, _ := node.Attrs["extensionKey"].(string); k != "nested-table" {
+		return "", false
+	}
+	params, _ := node.Attrs["parameters"].(map[string]any)
+	if params == nil {
+		return "", false
+	}
+	adfStr, _ := params["adf"].(string)
+	if adfStr == "" {
+		return "", false
+	}
+	var doc ADFNode
+	if err := json.Unmarshal([]byte(adfStr), &doc); err != nil {
+		return "", false
+	}
+	var table *ADFNode
+	if doc.Type == "table" {
+		table = &doc
+	} else {
+		for i := range doc.Content {
+			if doc.Content[i].Type == "table" {
+				table = &doc.Content[i]
+				break
+			}
+		}
+	}
+	if table == nil {
+		return "", false
+	}
+	return r.renderTableInlineHTML(*table), true
+}
+
+// renderTableRowHTML は tableRow ノードを1行の <tr> HTML に変換する
+func (r *adfRenderer) renderTableRowHTML(row ADFNode) string {
+	var sb strings.Builder
+	sb.WriteString("<tr>")
+	for _, cell := range row.Content {
+		var tag string
+		switch cell.Type {
+		case "tableHeader":
+			tag = "th"
+		case "tableCell":
+			tag = "td"
+		default:
+			continue
+		}
+		attrs := ""
+		if cs := intAttr(cell, "colspan", 1); cs > 1 {
+			attrs += fmt.Sprintf(` colspan="%d"`, cs)
+		}
+		if rs := intAttr(cell, "rowspan", 1); rs > 1 {
+			attrs += fmt.Sprintf(` rowspan="%d"`, rs)
+		}
+		sb.WriteString("<" + tag + attrs + ">" + r.renderCellChildren(cell.Content) + "</" + tag + ">")
+	}
+	sb.WriteString("</tr>")
+	return sb.String()
+}
+
+// renderTableInlineHTML は table ノードを1行の <table> HTML に変換する。
+// GFM セル内はインライン文脈のため、結合は HTML の colspan/rowspan 属性でそのまま保持できる。
+// ヘッダー行は <thead>、それ以外は <tbody> で明示的に囲む必要がある。
+// これを省略すると、ブラウザが全 <tr> を1つの暗黙 <tbody> にまとめてしまい、
+// ゼブラストライプ用CSS（tr:nth-child(2n) 等）がヘッダー行を数に含めてしまうため、
+// データ行の縞模様がヘッダー行1つ分ずれて誤って着色される。
+func (r *adfRenderer) renderTableInlineHTML(node ADFNode) string {
+	rows := make([]ADFNode, 0, len(node.Content))
+	for _, row := range node.Content {
+		if row.Type == "tableRow" {
+			rows = append(rows, row)
+		}
+	}
+
+	hasHeader := false
+	if len(rows) > 0 {
+		for _, cell := range rows[0].Content {
+			if cell.Type == "tableHeader" {
+				hasHeader = true
+				break
+			}
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("<table>")
+	if hasHeader {
+		sb.WriteString("<thead>" + r.renderTableRowHTML(rows[0]) + "</thead>")
+		rows = rows[1:]
+	}
+	if len(rows) > 0 {
+		sb.WriteString("<tbody>")
+		for _, row := range rows {
+			sb.WriteString(r.renderTableRowHTML(row))
+		}
+		sb.WriteString("</tbody>")
+	}
+	sb.WriteString("</table>")
+	return sb.String()
 }

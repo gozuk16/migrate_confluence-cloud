@@ -33,3 +33,4 @@
   - Converter.ConvertADF() 追加
   - IntermediateSaver を ADF JSON 保存・読み込みに変更
   - MDWriter のページ本文変換を ConvertADF に切り替え
+- [x] ADF テーブル変換の GFM 近似強化（セル内リスト/引用/結合セル/入れ子テーブル/alignment 対応）
