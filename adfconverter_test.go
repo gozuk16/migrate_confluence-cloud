@@ -904,3 +904,78 @@ func TestConvertADF_TableNestedTableParseError(t *testing.T) {
 		t.Errorf("got %q, want comment fallback", got)
 	}
 }
+
+func TestConvertADF_BoldTrailingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"hello ","marks":[{"type":"strong"}]},{"type":"text","text":"world"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "**hello** world") {
+		t.Errorf("got %q, want to contain %q", got, "**hello** world")
+	}
+	if strings.Contains(got, "hello **") {
+		t.Errorf("got %q, closing delimiter must not be preceded by a space", got)
+	}
+}
+
+func TestConvertADF_ItalicLeadingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"hello "},{"type":"text","text":" hi","marks":[{"type":"em"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "hello  *hi*") {
+		t.Errorf("got %q, want to contain %q", got, "hello  *hi*")
+	}
+	if strings.Contains(got, "* hi") {
+		t.Errorf("got %q, opening delimiter must not be followed by a space", got)
+	}
+}
+
+func TestConvertADF_StrikethroughSurroundingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"text "},{"type":"text","text":" del ","marks":[{"type":"strike"}]},{"type":"text","text":" more"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, " ~~del~~ ") {
+		t.Errorf("got %q, want to contain %q", got, " ~~del~~ ")
+	}
+}
+
+func TestConvertADF_BoldWhitespaceOnly(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"   ","marks":[{"type":"strong"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(got, "**") {
+		t.Errorf("got %q, whitespace-only text must not be wrapped in delimiters", got)
+	}
+}
+
+func TestConvertADF_BoldItalicOverlapWithSpaces(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"prefix "},{"type":"text","text":" foo ","marks":[{"type":"em"},{"type":"strong"}]},{"type":"text","text":" suffix"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, " ***foo*** ") {
+		t.Errorf("got %q, want to contain %q", got, " ***foo*** ")
+	}
+}
+
+func TestConvertADF_PanelHeadingBoldTrailingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"新しいスペースへようこそ! ","marks":[{"type":"strong"}]}]},{"type":"paragraph","content":[{"type":"text","text":"content"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "**新しいスペースへようこそ!** ") {
+		t.Errorf("got %q, want NOTE panel heading to render as closed bold", got)
+	}
+	if strings.Contains(got, "! **") {
+		t.Errorf("got %q, regression: literal ** must not appear (original bug)", got)
+	}
+}

@@ -140,6 +140,18 @@ func (r *adfRenderer) renderInline(node ADFNode) string {
 	}
 }
 
+// wrapDelimiter は前後の空白をデリミタの外側に保ったまま text をデリミタで囲む
+func wrapDelimiter(text, delimiter string) string {
+	core := strings.Trim(text, " \t\n")
+	if core == "" {
+		return text
+	}
+	start := strings.Index(text, core)
+	lead := text[:start]
+	trail := text[start+len(core):]
+	return lead + delimiter + core + delimiter + trail
+}
+
 // renderText はテキストノードにマークを適用して変換する
 func (r *adfRenderer) renderText(node ADFNode) string {
 	text := node.Text
@@ -148,13 +160,13 @@ func (r *adfRenderer) renderText(node ADFNode) string {
 		mark := node.Marks[i]
 		switch mark.Type {
 		case "strong":
-			text = "**" + text + "**"
+			text = wrapDelimiter(text, "**")
 		case "em":
-			text = "*" + text + "*"
+			text = wrapDelimiter(text, "*")
 		case "code":
 			text = "`" + text + "`"
 		case "strike":
-			text = "~~" + text + "~~"
+			text = wrapDelimiter(text, "~~")
 		case "underline":
 			text = "<u>" + text + "</u>"
 		case "link":
