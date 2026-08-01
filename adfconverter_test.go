@@ -979,3 +979,36 @@ func TestConvertADF_PanelHeadingBoldTrailingSpace(t *testing.T) {
 		t.Errorf("got %q, regression: literal ** must not appear (original bug)", got)
 	}
 }
+
+// TestConvertADF_CodeBlockInListItem はリスト項目内のコードブロックが出力されることを確認する
+func TestConvertADF_CodeBlockInListItem(t *testing.T) {
+	adf := adfDoc(`{"type":"bulletList","content":[` +
+		`{"type":"listItem","content":[` +
+		`{"type":"paragraph","content":[` + adfText("aaa") + `]},` +
+		`{"type":"codeBlock","content":[` + adfText("echo hi") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "- aaa\n  ```\n  echo hi\n  ```"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+// TestConvertADF_CodeBlockAsFirstListChild は listItem の先頭子要素が codeBlock の場合を確認する
+func TestConvertADF_CodeBlockAsFirstListChild(t *testing.T) {
+	adf := adfDoc(`{"type":"bulletList","content":[` +
+		`{"type":"listItem","content":[` +
+		`{"type":"codeBlock","content":[` + adfText("aaaaaa") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "- ```\n  aaaaaa\n  ```"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}

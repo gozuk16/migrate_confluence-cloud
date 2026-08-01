@@ -264,6 +264,17 @@ func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) st
 			lines = append(lines, r.renderBulletList(child, indent+1))
 		case "orderedList":
 			lines = append(lines, r.renderOrderedList(child, indent+1))
+		case "codeBlock":
+			blockLines := strings.Split(r.renderCodeBlock(child), "\n")
+			rest := blockLines
+			if first {
+				lines = append(lines, indentStr+prefix+blockLines[0])
+				rest = blockLines[1:]
+				first = false
+			}
+			for _, bl := range rest {
+				lines = append(lines, indentStr+"  "+bl)
+			}
 		}
 	}
 	return strings.Join(lines, "\n")
