@@ -4,6 +4,13 @@
 
 ### Fixed
 - ADFの `strong`/`em`/`strike` マークが前後に空白を含むテキストに付与された場合、CommonMarkのデリミタフランキング規則により装飾が閉じられずリテラル `**text **` のように表示される不具合を修正（`wrapDelimiter` ヘルパーで空白をデリミタ外に退避）。NOTEパネル内の見出し太字などで顕在化していた。
+- リスト項目内の `codeBlock` が Markdown 出力から欠落する不具合を修正（`renderListItem` に codeBlock 対応を追加）
+- 入れ子のタスクリスト（チェックボックス）が Markdown 出力から欠落する不具合を修正（`renderTaskList` の再帰対応）
+- 番号付きリストの入れ子が 2 スペースインデントで分断される不具合を修正（マーカー幅ベースの累積インデント計算に変更）
+- 隣接する同種強調 run（`em` / `strong` / `strike` など）が `*あけ**ぼ**の*` のように化ける不具合を修正（`renderInlineNodes` でグループ化し 1 組のデリミタで囲む）
+- ADF の `textColor` 属性が失われる不具合を修正（`<span style="color: #RRGGBB">` による HTML 埋め込みで再現）
+- ADF の `alignment`（中央寄せ・右寄せ）が失われる不具合を修正（`<div style="text-align: center|right">` による HTML 埋め込みで再現）
+- Confluence コメント投稿者が `accountId` のまま表示される不具合を修正（`GetUserDisplayName` を MDWriter にワイヤリングし表示名を出力）
 
 ### Added（ADFテーブル変換強化）
 - テーブルセル内のリスト・引用・複数段落・コードブロック・タスクリストを HTML 埋め込みで変換
