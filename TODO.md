@@ -2,7 +2,11 @@
 
 ## 進行中
 
-（なし）
+- [ ] ADF変換の未対応要素修正（設計: docs/superpowers/specs/2026-08-01-adf-conversion-fixes-design.md）
+  - [ ] A: リスト内ブロック要素の欠落修正（listItem内codeBlock、入れ子taskList）
+  - [ ] B: リスト入れ子インデントのマーカー幅ベース化と隣接強調runの結合
+  - [ ] C: 文字色（textColor→span）・配置（alignment→div）のHTML再現
+  - [ ] D: コメント投稿者名の解決（GetUserDisplayNameのワイヤリング）
 
 ## 未着手
 
