@@ -50,7 +50,11 @@ func (r *adfRenderer) renderNode(node ADFNode, indent string) string {
 	case "doc":
 		return r.renderBlockChildren(node.Content, indent)
 	case "paragraph":
-		return r.renderInlineNodes(node.Content)
+		text := r.renderInlineNodes(node.Content)
+		if align := alignmentStyle(node); align != "" && text != "" {
+			return `<div style="text-align: ` + align + `">` + "\n\n" + text + "\n\n</div>"
+		}
+		return text
 	case "text":
 		return r.renderText(node)
 	case "hardBreak":
@@ -223,6 +227,22 @@ func wrapDelimiter(text, delimiter string) string {
 	lead := text[:start]
 	trail := text[start+len(core):]
 	return lead + delimiter + core + delimiter + trail
+}
+
+// alignmentStyle は段落の alignment マークを CSS text-align 値に変換する
+func alignmentStyle(node ADFNode) string {
+	for _, m := range node.Marks {
+		if m.Type != "alignment" || m.Attrs == nil {
+			continue
+		}
+		switch m.Attrs["align"] {
+		case "center":
+			return "center"
+		case "end":
+			return "right"
+		}
+	}
+	return ""
 }
 
 // applyTextColor は textColor マークを span タグに変換する

@@ -1090,3 +1090,29 @@ func TestConvertADF_AdjacentEmphasisRuns(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// TestConvertADF_AlignmentCenter は中央寄せ段落が div で包まれることを確認する
+func TestConvertADF_AlignmentCenter(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"center"}}],"content":[` + adfText("あ中央あ") + `]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<div style=\"text-align: center\">\n\nあ中央あ\n\n</div>"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestConvertADF_AlignmentEnd は右寄せ段落が div で包まれることを確認する
+func TestConvertADF_AlignmentEnd(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"end"}}],"content":[` + adfText("右") + `]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<div style=\"text-align: right\">\n\n右\n\n</div>"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
