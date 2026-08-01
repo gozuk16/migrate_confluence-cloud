@@ -1052,3 +1052,23 @@ func TestConvertADF_NestedTaskList(t *testing.T) {
 		t.Errorf("got %q, want to contain %q", got, want)
 	}
 }
+
+// TestConvertADF_AdjacentEmphasisRuns は同じ強調マークを持つ隣接テキストが1組のデリミタに結合されることを確認する
+func TestConvertADF_AdjacentEmphasisRuns(t *testing.T) {
+	// 春[strong] は あけ[em] ぼ[textColor+em] の[em] → **春**は*あけぼの*
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"春","marks":[{"type":"strong"}]},` +
+		`{"type":"text","text":"は"},` +
+		`{"type":"text","text":"あけ","marks":[{"type":"em"}]},` +
+		`{"type":"text","text":"ぼ","marks":[{"type":"textColor","attrs":{"color":"#ffc400"}},{"type":"em"}]},` +
+		`{"type":"text","text":"の","marks":[{"type":"em"}]}` +
+		`]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "**春**は*あけぼの*"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}

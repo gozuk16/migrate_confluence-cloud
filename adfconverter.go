@@ -107,11 +107,78 @@ func (r *adfRenderer) renderBlockChildren(nodes []ADFNode, indent string) string
 	return strings.Join(parts, "\n\n")
 }
 
-// renderInlineNodes はインライン要素を連結する
+// mdDelimiters はデリミタ系マークの正規順序（先頭が最外側）と対応デリミタ
+var mdDelimiters = []struct {
+	mark  string
+	delim string
+}{
+	{"strong", "**"},
+	{"em", "*"},
+	{"strike", "~~"},
+}
+
+// delimiterMarks は text ノードが持つデリミタ系マークを正規順序で返す。
+// code/link/subsup/underline を含むノードと text 以外のノードはグループ化対象外（ok=false）
+func delimiterMarks(node ADFNode) ([]string, bool) {
+	if node.Type != "text" {
+		return nil, false
+	}
+	present := map[string]bool{}
+	for _, m := range node.Marks {
+		switch m.Type {
+		case "strong", "em", "strike":
+			present[m.Type] = true
+		case "code", "link", "subsup", "underline":
+			return nil, false
+		}
+	}
+	var marks []string
+	for _, d := range mdDelimiters {
+		if present[d.mark] {
+			marks = append(marks, d.mark)
+		}
+	}
+	return marks, true
+}
+
+// renderNonDelimiterText はデリミタ系マーク以外を適用したテキストを返す
+// （デリミタ系はグループ単位で renderInlineNodes が適用する）
+func (r *adfRenderer) renderNonDelimiterText(node ADFNode) string {
+	return node.Text
+}
+
+// renderInlineNodes はインライン要素を連結する。
+// 同じデリミタ系マークを持つ隣接テキストノードは1つのrunに結合してから囲む
 func (r *adfRenderer) renderInlineNodes(nodes []ADFNode) string {
+	delimOf := map[string]string{}
+	for _, d := range mdDelimiters {
+		delimOf[d.mark] = d.delim
+	}
 	var sb strings.Builder
-	for _, n := range nodes {
-		sb.WriteString(r.renderInline(n))
+	for i := 0; i < len(nodes); {
+		marks, ok := delimiterMarks(nodes[i])
+		if !ok {
+			sb.WriteString(r.renderInline(nodes[i]))
+			i++
+			continue
+		}
+		sig := strings.Join(marks, ",")
+		var group strings.Builder
+		j := i
+		for j < len(nodes) {
+			m2, ok2 := delimiterMarks(nodes[j])
+			if !ok2 || strings.Join(m2, ",") != sig {
+				break
+			}
+			group.WriteString(r.renderNonDelimiterText(nodes[j]))
+			j++
+		}
+		text := group.String()
+		for k := len(marks) - 1; k >= 0; k-- {
+			text = wrapDelimiter(text, delimOf[marks[k]])
+		}
+		sb.WriteString(text)
+		i = j
 	}
 	return sb.String()
 }
