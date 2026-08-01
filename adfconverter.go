@@ -41,11 +41,11 @@ func convertADF(adfJSON string, attachmentMap map[string]string) (string, error)
 		return "", fmt.Errorf("ADF JSONパースエラー: %w", err)
 	}
 	r := &adfRenderer{attachmentMap: attachmentMap}
-	return strings.TrimSpace(r.renderNode(root, 0)), nil
+	return strings.TrimSpace(r.renderNode(root, "")), nil
 }
 
 // renderNode はノードタイプに応じて変換を dispatch する
-func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
+func (r *adfRenderer) renderNode(node ADFNode, indent string) string {
 	switch node.Type {
 	case "doc":
 		return r.renderBlockChildren(node.Content, indent)
@@ -72,7 +72,7 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 	case "table":
 		return r.renderTable(node)
 	case "taskList":
-		return r.renderTaskList(node, "")
+		return r.renderTaskList(node, indent)
 	case "decisionList":
 		return r.renderDecisionList(node)
 	case "expand", "nestedExpand":
@@ -97,7 +97,7 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 }
 
 // renderBlockChildren はブロック要素の子ノードを空行区切りで結合する
-func (r *adfRenderer) renderBlockChildren(nodes []ADFNode, indent int) string {
+func (r *adfRenderer) renderBlockChildren(nodes []ADFNode, indent string) string {
 	var parts []string
 	for _, n := range nodes {
 		if s := r.renderNode(n, indent); s != "" {
@@ -226,7 +226,7 @@ func (r *adfRenderer) renderHeading(node ADFNode) string {
 	return prefix + " " + r.renderInlineNodes(node.Content)
 }
 
-func (r *adfRenderer) renderBulletList(node ADFNode, indent int) string {
+func (r *adfRenderer) renderBulletList(node ADFNode, indent string) string {
 	var lines []string
 	for _, item := range node.Content {
 		if item.Type == "listItem" {
@@ -236,7 +236,7 @@ func (r *adfRenderer) renderBulletList(node ADFNode, indent int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r *adfRenderer) renderOrderedList(node ADFNode, indent int) string {
+func (r *adfRenderer) renderOrderedList(node ADFNode, indent string) string {
 	var lines []string
 	for i, item := range node.Content {
 		if item.Type == "listItem" {
@@ -246,8 +246,9 @@ func (r *adfRenderer) renderOrderedList(node ADFNode, indent int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) string {
-	indentStr := strings.Repeat("  ", indent)
+// renderListItem はリスト項目を変換する。子要素のインデントはマーカー幅から算出する
+func (r *adfRenderer) renderListItem(node ADFNode, indent string, prefix string) string {
+	childIndent := indent + strings.Repeat(" ", len(prefix))
 	var lines []string
 	first := true
 	for _, child := range node.Content {
@@ -255,25 +256,25 @@ func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) st
 		case "paragraph":
 			text := r.renderInlineNodes(child.Content)
 			if first {
-				lines = append(lines, indentStr+prefix+text)
+				lines = append(lines, indent+prefix+text)
 				first = false
 			} else {
-				lines = append(lines, indentStr+"  "+text)
+				lines = append(lines, childIndent+text)
 			}
 		case "bulletList":
-			lines = append(lines, r.renderBulletList(child, indent+1))
+			lines = append(lines, r.renderBulletList(child, childIndent))
 		case "orderedList":
-			lines = append(lines, r.renderOrderedList(child, indent+1))
+			lines = append(lines, r.renderOrderedList(child, childIndent))
 		case "codeBlock":
 			blockLines := strings.Split(r.renderCodeBlock(child), "\n")
 			rest := blockLines
 			if first {
-				lines = append(lines, indentStr+prefix+blockLines[0])
+				lines = append(lines, indent+prefix+blockLines[0])
 				rest = blockLines[1:]
 				first = false
 			}
 			for _, bl := range rest {
-				lines = append(lines, indentStr+"  "+bl)
+				lines = append(lines, childIndent+bl)
 			}
 		}
 	}
@@ -281,7 +282,7 @@ func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) st
 }
 
 func (r *adfRenderer) renderBlockquote(node ADFNode) string {
-	inner := r.renderBlockChildren(node.Content, 0)
+	inner := r.renderBlockChildren(node.Content, "")
 	var sb strings.Builder
 	for line := range strings.SplitSeq(inner, "\n") {
 		if line == "" {
@@ -518,10 +519,10 @@ func (r *adfRenderer) renderCellBlock(node ADFNode) string {
 		if s, ok := r.renderNestedTableHTML(node); ok {
 			return s
 		}
-		return strings.TrimSpace(r.renderNode(node, 0))
+		return strings.TrimSpace(r.renderNode(node, ""))
 	default:
 		// 未知のブロック要素は通常変換の結果を採用（改行は renderCellContent が <br> 化する）
-		return strings.TrimSpace(r.renderNode(node, 0))
+		return strings.TrimSpace(r.renderNode(node, ""))
 	}
 }
 
@@ -579,7 +580,7 @@ func (r *adfRenderer) renderPanel(node ADFNode) string {
 	case "success":
 		alertType = "TIP"
 	}
-	inner := r.renderBlockChildren(node.Content, 0)
+	inner := r.renderBlockChildren(node.Content, "")
 	var sb strings.Builder
 	sb.WriteString("> [!" + alertType + "]\n")
 	for line := range strings.SplitSeq(inner, "\n") {
@@ -633,7 +634,7 @@ func (r *adfRenderer) renderExpand(node ADFNode) string {
 			title = ttl
 		}
 	}
-	inner := r.renderBlockChildren(node.Content, 0)
+	inner := r.renderBlockChildren(node.Content, "")
 	return "<details><summary>" + title + "</summary>\n\n" + inner + "\n\n</details>"
 }
 
@@ -761,7 +762,7 @@ func (r *adfRenderer) renderExtension(node ADFNode) string {
 
 func (r *adfRenderer) renderBodiedExtension(node ADFNode) string {
 	if len(node.Content) > 0 {
-		return r.renderBlockChildren(node.Content, 0)
+		return r.renderBlockChildren(node.Content, "")
 	}
 	return r.renderExtension(node)
 }

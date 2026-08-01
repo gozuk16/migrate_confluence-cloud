@@ -223,6 +223,29 @@ func TestConvertADF_NestedBulletList(t *testing.T) {
 	}
 }
 
+// TestConvertADF_NestedListInOrderedList は番号付きリスト配下の入れ子がマーカー幅(3)でインデントされることを確認する
+func TestConvertADF_NestedListInOrderedList(t *testing.T) {
+	adf := adfDoc(`{"type":"orderedList","content":[` +
+		`{"type":"listItem","content":[` +
+		`{"type":"paragraph","content":[` + adfText("番号付きリスト") + `]},` +
+		`{"type":"bulletList","content":[` +
+		`{"type":"listItem","content":[{"type":"paragraph","content":[` + adfText("リスト") + `]}]}` +
+		`]}]},` +
+		`{"type":"listItem","content":[{"type":"paragraph","content":[` + adfText("二番") + `]}]},` +
+		`{"type":"listItem","content":[` +
+		`{"type":"paragraph","content":[` + adfText("三番") + `]},` +
+		`{"type":"codeBlock","content":[` + adfText("aaaaa") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "1. 番号付きリスト\n   - リスト\n2. 二番\n3. 三番\n   ```\n   aaaaa\n   ```"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestConvertADF_Blockquote(t *testing.T) {
 	adf := adfDoc(`{"type":"blockquote","content":[{"type":"paragraph","content":[{"type":"text","text":"quoted"}]}]}`)
 	got, err := convertADF(adf, nil)
