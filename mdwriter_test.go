@@ -9,7 +9,7 @@ import (
 
 func newTestMDWriter(dir string) *MDWriter {
 	conv := NewConverter(nil, nil)
-	return NewMDWriter(dir, conv)
+	return NewMDWriter(dir, conv, nil)
 }
 
 // TestMDWriter_WritePage はWritePageのテスト
@@ -209,5 +209,51 @@ func TestFormatDate(t *testing.T) {
 		if result != tt.expected {
 			t.Errorf("formatDate(%q) = %q, 期待: %q", tt.input, result, tt.expected)
 		}
+	}
+}
+
+// TestMDWriter_WritePage_ResolvesCommentAuthor はコメント投稿者が表示名に解決されることを確認する
+func TestMDWriter_WritePage_ResolvesCommentAuthor(t *testing.T) {
+	tmpDir := t.TempDir()
+	conv := NewConverter(nil, nil)
+	writer := NewMDWriter(tmpDir, conv, func(accountID string) string {
+		if accountID == "user123" {
+			return "山田 太郎"
+		}
+		return accountID
+	})
+
+	page := &Page{
+		ID:    "12345",
+		Title: "コメント付きページ",
+		Body: PageBody{
+			Storage: Storage{Value: "<p>本文</p>"},
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`,
+				Representation: "atlas_doc_format",
+			},
+		},
+		Version: Version{Number: 1, CreatedAt: "2024-01-01T00:00:00.000Z"},
+	}
+	comments := []Comment{
+		{
+			ID:      "c001",
+			Body:    CommentBody{Storage: Storage{Value: "<p>コメント内容</p>"}},
+			Version: Version{CreatedAt: "2024-01-02T00:00:00.000Z", AuthorID: "user123"},
+		},
+	}
+
+	err := writer.WritePage(page, "TEST", "テストスペース", "", nil, comments, nil)
+	if err != nil {
+		t.Fatalf("WritePage エラー: %v", err)
+	}
+
+	mdPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "index.md")
+	content, err := os.ReadFile(mdPath)
+	if err != nil {
+		t.Fatalf("ファイル読み込みエラー: %v", err)
+	}
+	if !strings.Contains(string(content), "**投稿者:** 山田 太郎") {
+		t.Errorf("投稿者が表示名に解決されていません\n内容: %q", string(content))
 	}
 }

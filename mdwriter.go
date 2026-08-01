@@ -10,15 +10,17 @@ import (
 
 // MDWriter はMarkdownファイルの出力を管理する
 type MDWriter struct {
-	outputDir string
-	converter *Converter
+	outputDir   string
+	converter   *Converter
+	resolveUser func(accountID string) string // accountId → 表示名。nil の場合は解決しない
 }
 
 // NewMDWriter は新しいMDWriterを作成する
-func NewMDWriter(outputDir string, converter *Converter) *MDWriter {
+func NewMDWriter(outputDir string, converter *Converter, resolveUser func(accountID string) string) *MDWriter {
 	return &MDWriter{
-		outputDir: outputDir,
-		converter: converter,
+		outputDir:   outputDir,
+		converter:   converter,
+		resolveUser: resolveUser,
 	}
 }
 
@@ -88,10 +90,14 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			if authorID == "" {
 				authorID = "unknown"
 			}
+			authorName := authorID
+			if w.resolveUser != nil && authorID != "unknown" {
+				authorName = w.resolveUser(authorID)
+			}
 			createdAt := formatDate(comment.Version.CreatedAt)
 
 			sb.WriteString(fmt.Sprintf("### コメント %d\n\n", i+1))
-			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorID))
+			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorName))
 			sb.WriteString(fmt.Sprintf("**日時:** %s\n\n", createdAt))
 
 			commentMarkdown, err := w.converter.Convert(comment.Body.Storage.Value)
