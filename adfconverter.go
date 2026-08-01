@@ -72,7 +72,7 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 	case "table":
 		return r.renderTable(node)
 	case "taskList":
-		return r.renderTaskList(node)
+		return r.renderTaskList(node, "")
 	case "decisionList":
 		return r.renderDecisionList(node)
 	case "expand", "nestedExpand":
@@ -592,23 +592,26 @@ func (r *adfRenderer) renderPanel(node ADFNode) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func (r *adfRenderer) renderTaskList(node ADFNode) string {
+// renderTaskList はタスクリストを変換する。入れ子の taskList はインデントを深くして再帰する
+func (r *adfRenderer) renderTaskList(node ADFNode, indent string) string {
 	var lines []string
 	for _, item := range node.Content {
-		if item.Type != "taskItem" {
-			continue
-		}
-		state := ""
-		if item.Attrs != nil {
-			if s, ok := item.Attrs["state"].(string); ok {
-				state = s
+		switch item.Type {
+		case "taskItem":
+			state := ""
+			if item.Attrs != nil {
+				if s, ok := item.Attrs["state"].(string); ok {
+					state = s
+				}
 			}
+			check := "- [ ] "
+			if state == "DONE" {
+				check = "- [x] "
+			}
+			lines = append(lines, indent+check+r.renderInlineNodes(item.Content))
+		case "taskList":
+			lines = append(lines, r.renderTaskList(item, indent+"  "))
 		}
-		check := "- [ ] "
-		if state == "DONE" {
-			check = "- [x] "
-		}
-		lines = append(lines, check+r.renderInlineNodes(item.Content))
 	}
 	return strings.Join(lines, "\n")
 }

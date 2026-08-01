@@ -1012,3 +1012,20 @@ func TestConvertADF_CodeBlockAsFirstListChild(t *testing.T) {
 		t.Errorf("got %q, want to contain %q", got, want)
 	}
 }
+
+// TestConvertADF_NestedTaskList は入れ子のタスクリストが出力されることを確認する
+func TestConvertADF_NestedTaskList(t *testing.T) {
+	adf := adfDoc(`{"type":"taskList","content":[` +
+		`{"type":"taskItem","attrs":{"state":"TODO"},"content":[` + adfText("親タスク") + `]},` +
+		`{"type":"taskList","content":[` +
+		`{"type":"taskItem","attrs":{"state":"DONE"},"content":[` + adfText("子タスク") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "- [ ] 親タスク\n  - [x] 子タスク"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
