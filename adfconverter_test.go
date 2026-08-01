@@ -124,17 +124,35 @@ func TestConvertADF_Superscript(t *testing.T) {
 	}
 }
 
-func TestConvertADF_TextColorIgnored(t *testing.T) {
-	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"red","marks":[{"type":"textColor","attrs":{"color":"#ff0000"}}]}]}`)
+// TestConvertADF_TextColor は文字色が span で保持されることを確認する
+func TestConvertADF_TextColor(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"赤い字","marks":[{"type":"textColor","attrs":{"color":"#ff5630"}}]}` +
+		`]}`)
 	got, err := convertADF(adf, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(got, "red") {
-		t.Errorf("got %q, want to contain %q", got, "red")
+	want := `<span style="color: #ff5630">赤い字</span>`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
-	if strings.Contains(got, "#ff0000") {
-		t.Errorf("got %q, color should be stripped", got)
+}
+
+// TestConvertADF_TextColorInsideEmphasis は色付き文字が強調runの内側で span になることを確認する
+func TestConvertADF_TextColorInsideEmphasis(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"あけ","marks":[{"type":"em"}]},` +
+		`{"type":"text","text":"ぼ","marks":[{"type":"textColor","attrs":{"color":"#ffc400"}},{"type":"em"}]},` +
+		`{"type":"text","text":"の","marks":[{"type":"em"}]}` +
+		`]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `*あけ<span style="color: #ffc400">ぼ</span>の*`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
@@ -1067,7 +1085,7 @@ func TestConvertADF_AdjacentEmphasisRuns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := "**春**は*あけぼの*"
+	want := `**春**は*あけ<span style="color: #ffc400">ぼ</span>の*`
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

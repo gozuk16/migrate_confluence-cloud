@@ -144,7 +144,13 @@ func delimiterMarks(node ADFNode) ([]string, bool) {
 // renderNonDelimiterText はデリミタ系マーク以外を適用したテキストを返す
 // （デリミタ系はグループ単位で renderInlineNodes が適用する）
 func (r *adfRenderer) renderNonDelimiterText(node ADFNode) string {
-	return node.Text
+	text := node.Text
+	for i := len(node.Marks) - 1; i >= 0; i-- {
+		if node.Marks[i].Type == "textColor" {
+			text = applyTextColor(text, node.Marks[i])
+		}
+	}
+	return text
 }
 
 // renderInlineNodes はインライン要素を連結する。
@@ -219,6 +225,15 @@ func wrapDelimiter(text, delimiter string) string {
 	return lead + delimiter + core + delimiter + trail
 }
 
+// applyTextColor は textColor マークを span タグに変換する
+func applyTextColor(text string, mark ADFMark) string {
+	color, _ := mark.Attrs["color"].(string)
+	if color == "" {
+		return text
+	}
+	return `<span style="color: ` + color + `">` + text + `</span>`
+}
+
 // renderText はテキストノードにマークを適用して変換する
 func (r *adfRenderer) renderText(node ADFNode) string {
 	text := node.Text
@@ -252,7 +267,9 @@ func (r *adfRenderer) renderText(node ADFNode) string {
 				}
 			}
 			text = "<" + tag + ">" + text + "</" + tag + ">"
-		// textColor, backgroundColor, annotation はテキストのみ保持
+		case "textColor":
+			text = applyTextColor(text, mark)
+		// backgroundColor, annotation はテキストのみ保持
 		}
 	}
 	return text
