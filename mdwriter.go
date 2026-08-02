@@ -121,6 +121,12 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			}
 			createdAt := formatDate(comment.Version.CreatedAt)
 
+			// Depth>=1 のリプライは div でインデント
+			if depth > 0 {
+				marginLeft := depth * 2
+				sb.WriteString(fmt.Sprintf("<div style=\"margin-left: %dem\">\n\n", marginLeft))
+			}
+
 			sb.WriteString(fmt.Sprintf("%s コメント %s\n\n", heading, label))
 			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorName))
 			sb.WriteString(fmt.Sprintf("**日時:** %s\n\n", createdAt))
@@ -131,6 +137,11 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			} else {
 				sb.WriteString(commentMarkdown)
 				sb.WriteString("\n\n")
+			}
+
+			// Depth>=1 のリプライは div をクローズ
+			if depth > 0 {
+				sb.WriteString("</div>\n\n")
 			}
 		}
 	}

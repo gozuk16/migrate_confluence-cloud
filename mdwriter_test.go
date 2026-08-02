@@ -303,13 +303,26 @@ func TestMDWriter_WritePage_WithCommentReplies(t *testing.T) {
 	}
 	contentStr := string(content)
 
+	// トップレベルコメント（Depth=0）は divなし
 	if !strings.Contains(contentStr, "### コメント 1\n\n") {
 		t.Errorf("親コメントの見出しが期待と異なります\n内容: %q", contentStr)
+	}
+
+	// 返信コメント（Depth=1）は div でインデント
+	// <div style="margin-left: 2em">
+	// #### コメント 1-1
+	// ... 本文 ...
+	// </div>
+	if !strings.Contains(contentStr, "<div style=\"margin-left: 2em\">") {
+		t.Errorf("返信コメントが div でインデントされていません\n内容: %q", contentStr)
 	}
 	if !strings.Contains(contentStr, "#### コメント 1-1\n\n") {
 		t.Errorf("返信コメントの見出しが期待と異なります\n内容: %q", contentStr)
 	}
 	if !strings.Contains(contentStr, "返信コメント") {
 		t.Errorf("返信コメントの本文が含まれていません\n内容: %q", contentStr)
+	}
+	if !strings.Contains(contentStr, "</div>") {
+		t.Errorf("返信コメント div のクローズタグが含まれていません\n内容: %q", contentStr)
 	}
 }
