@@ -11,6 +11,8 @@
 - ADF の `textColor` 属性が失われる不具合を修正（`<span style="color: #RRGGBB">` による HTML 埋め込みで再現）
 - ADF の `alignment`（中央寄せ・右寄せ）が失われる不具合を修正（`<div style="text-align: center|right">` による HTML 埋め込みで再現）
 - Confluence コメント投稿者が `accountId` のまま表示される不具合を修正（`GetUserDisplayName` を MDWriter にワイヤリングし表示名を出力）。convert コマンドはオフライン動作のため deletedUsers マッピングのみで解決する（API 解決は page/space コマンドのみ）
+- フッターコメントへのリプライ（子コメント）が取得されない不具合を修正（`/footer-comments/{id}/children` を再帰取得し、`#### コメント 1-1` のような階層見出しで出力）。中間ファイル経由の convert コマンドでは階層情報が保存されないためフラット表示となる（既知の制限）
+- `status` マクロが `🔵[ok]` のような絵文字テキストになる問題を修正（Confluence 風 lozenge バッジをインライン CSS の `<span>` で再現、テキストは HTML エスケープ）
 
 ### Added（ADFテーブル変換強化）
 - テーブルセル内のリスト・引用・複数段落・コードブロック・タスクリストを HTML 埋め込みで変換
