@@ -37,6 +37,10 @@
 - [x] ADF強調マーク（strong/em/strike）の前後空白によるMarkdown崩れ修正
   - wrapDelimiter ヘルパー追加（前後空白をデリミタ外に退避）
   - NOTEパネル内などで前後空白付きテキストを太字/斜体/取り消し線にした際にリテラル `**` 表示される不具合を解消
+- [x] コメントリプライ取得とstatusバッジ修正（PR #9に追加）
+  - フッターコメントのリプライを `/footer-comments/{id}/children` から再帰取得し階層見出しで出力
+  - リプライを深さに応じて `<div style="margin-left: {N}em">` でインデント表示
+  - status マクロを Confluence 風 lozenge バッジ（インラインCSS span）で再現
 - [x] ADF変換の未対応要素修正（設計: docs/superpowers/specs/2026-08-01-adf-conversion-fixes-design.md）
   - [x] A: リスト内ブロック要素の欠落修正（listItem内codeBlock、入れ子taskList）
   - [x] B: リスト入れ子インデントのマーカー幅ベース化と隣接強調runの結合
