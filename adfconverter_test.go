@@ -124,17 +124,51 @@ func TestConvertADF_Superscript(t *testing.T) {
 	}
 }
 
-func TestConvertADF_TextColorIgnored(t *testing.T) {
-	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"red","marks":[{"type":"textColor","attrs":{"color":"#ff0000"}}]}]}`)
+// TestConvertADF_TextColor は文字色が span で保持されることを確認する
+func TestConvertADF_TextColor(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"赤い字","marks":[{"type":"textColor","attrs":{"color":"#ff5630"}}]}` +
+		`]}`)
 	got, err := convertADF(adf, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(got, "red") {
-		t.Errorf("got %q, want to contain %q", got, "red")
+	want := `<span style="color: #ff5630">赤い字</span>`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
-	if strings.Contains(got, "#ff0000") {
-		t.Errorf("got %q, color should be stripped", got)
+}
+
+// TestConvertADF_TextColorInsideEmphasis は色付き文字が強調runの内側で span になることを確認する
+func TestConvertADF_TextColorInsideEmphasis(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"あけ","marks":[{"type":"em"}]},` +
+		`{"type":"text","text":"ぼ","marks":[{"type":"textColor","attrs":{"color":"#ffc400"}},{"type":"em"}]},` +
+		`{"type":"text","text":"の","marks":[{"type":"em"}]}` +
+		`]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `*あけ<span style="color: #ffc400">ぼ</span>の*`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestConvertADF_TextColorInvalidValue は color 値に不正な文字列（HTML属性突破を狙った値）が
+// 与えられた場合に span を生成せず素のテキストを返すことを確認する
+func TestConvertADF_TextColorInvalidValue(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"危険","marks":[{"type":"textColor","attrs":{"color":"red\"><script>alert(1)</script>"}}]}` +
+		`]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "危険"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
@@ -220,6 +254,29 @@ func TestConvertADF_NestedBulletList(t *testing.T) {
 	}
 	if !strings.Contains(got, "  - Child") {
 		t.Errorf("got %q, want indented child item", got)
+	}
+}
+
+// TestConvertADF_NestedListInOrderedList は番号付きリスト配下の入れ子がマーカー幅(3)でインデントされることを確認する
+func TestConvertADF_NestedListInOrderedList(t *testing.T) {
+	adf := adfDoc(`{"type":"orderedList","content":[` +
+		`{"type":"listItem","content":[` +
+		`{"type":"paragraph","content":[` + adfText("番号付きリスト") + `]},` +
+		`{"type":"bulletList","content":[` +
+		`{"type":"listItem","content":[{"type":"paragraph","content":[` + adfText("リスト") + `]}]}` +
+		`]}]},` +
+		`{"type":"listItem","content":[{"type":"paragraph","content":[` + adfText("二番") + `]}]},` +
+		`{"type":"listItem","content":[` +
+		`{"type":"paragraph","content":[` + adfText("三番") + `]},` +
+		`{"type":"codeBlock","content":[` + adfText("aaaaa") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "1. 番号付きリスト\n   - リスト\n2. 二番\n3. 三番\n   ```\n   aaaaa\n   ```"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
@@ -369,6 +426,29 @@ func TestConvertADF_TableSingleRow(t *testing.T) {
 	}
 }
 
+// TestConvertADF_TableCellAlignmentNoDiv はテーブルセル内の alignment マークが
+// 段落と同様の div ラップ対象にならない（列の GFM アライメントのみで表現される）ことを確認する
+func TestConvertADF_TableCellAlignmentNoDiv(t *testing.T) {
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"center"}}],"content":[{"type":"text","text":"Centered"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(got, "<div") {
+		t.Errorf("got %q, table cell content should not contain div for alignment", got)
+	}
+	if !strings.Contains(got, ":---:") {
+		t.Errorf("got %q, want centered column alignment separator", got)
+	}
+	if !strings.Contains(got, "| Centered |") {
+		t.Errorf("got %q, want cell content", got)
+	}
+}
+
 func TestConvertADF_TaskList(t *testing.T) {
 	adf := adfDoc(`{"type":"taskList","content":[
         {"type":"taskItem","attrs":{"state":"DONE"},"content":[{"type":"text","text":"Done task"}]},
@@ -419,14 +499,15 @@ func TestConvertADF_Expand(t *testing.T) {
 func TestConvertADF_Status(t *testing.T) {
 	tests := []struct {
 		color string
-		emoji string
+		bg    string
+		fg    string
 	}{
-		{"green", "🟢"},
-		{"red", "🔴"},
-		{"yellow", "🟡"},
-		{"blue", "🔵"},
-		{"purple", "🟣"},
-		{"neutral", "⚫"},
+		{"neutral", "#dfe1e6", "#42526e"},
+		{"purple", "#eae6ff", "#403294"},
+		{"blue", "#deebff", "#0747a6"},
+		{"red", "#ffebe6", "#bf2600"},
+		{"yellow", "#fff0b3", "#172b4d"},
+		{"green", "#e3fcef", "#006644"},
 	}
 	for _, tt := range tests {
 		adf := adfDoc(fmt.Sprintf(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"%s","text":"OK"}}]}`, tt.color))
@@ -434,12 +515,46 @@ func TestConvertADF_Status(t *testing.T) {
 		if err != nil {
 			t.Fatalf("color %s: unexpected error: %v", tt.color, err)
 		}
-		if !strings.Contains(got, tt.emoji) {
-			t.Errorf("color %s: got %q, want emoji %s", tt.color, got, tt.emoji)
+		if !strings.Contains(got, "background-color: "+tt.bg) {
+			t.Errorf("color %s: got %q, want background-color %s", tt.color, got, tt.bg)
 		}
-		if !strings.Contains(got, "[OK]") {
-			t.Errorf("color %s: got %q, want [OK]", tt.color, got)
+		if !strings.Contains(got, "color: "+tt.fg) {
+			t.Errorf("color %s: got %q, want color %s", tt.color, got, tt.fg)
 		}
+		if !strings.Contains(got, ">OK</span>") {
+			t.Errorf("color %s: got %q, want text OK inside span", tt.color, got)
+		}
+	}
+}
+
+// TestConvertADF_Status_UnknownColorFallsBackToNeutral は未知の color 値が neutral 配色に
+// フォールバックすることを確認する
+func TestConvertADF_Status_UnknownColorFallsBackToNeutral(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"mystery","text":"OK"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "background-color: #dfe1e6") {
+		t.Errorf("got %q, want neutral background-color #dfe1e6", got)
+	}
+	if !strings.Contains(got, "color: #42526e") {
+		t.Errorf("got %q, want neutral color #42526e", got)
+	}
+}
+
+// TestConvertADF_Status_EscapesText はstatusのtextに含まれるHTMLがエスケープされることを確認する
+func TestConvertADF_Status_EscapesText(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"green","text":"<script>alert(1)</script>"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "&lt;script&gt;") {
+		t.Errorf("got %q, want escaped script tag", got)
+	}
+	if strings.Contains(got, "<script>") {
+		t.Errorf("got %q, unescaped script tag present", got)
 	}
 }
 
@@ -902,5 +1017,176 @@ func TestConvertADF_TableNestedTableParseError(t *testing.T) {
 	}
 	if !strings.Contains(got, "<!-- macro: nested-table -->") {
 		t.Errorf("got %q, want comment fallback", got)
+	}
+}
+
+func TestConvertADF_BoldTrailingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"hello ","marks":[{"type":"strong"}]},{"type":"text","text":"world"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "**hello** world") {
+		t.Errorf("got %q, want to contain %q", got, "**hello** world")
+	}
+	if strings.Contains(got, "hello **") {
+		t.Errorf("got %q, closing delimiter must not be preceded by a space", got)
+	}
+}
+
+func TestConvertADF_ItalicLeadingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"hello "},{"type":"text","text":" hi","marks":[{"type":"em"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "hello  *hi*") {
+		t.Errorf("got %q, want to contain %q", got, "hello  *hi*")
+	}
+	if strings.Contains(got, "* hi") {
+		t.Errorf("got %q, opening delimiter must not be followed by a space", got)
+	}
+}
+
+func TestConvertADF_StrikethroughSurroundingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"text "},{"type":"text","text":" del ","marks":[{"type":"strike"}]},{"type":"text","text":" more"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, " ~~del~~ ") {
+		t.Errorf("got %q, want to contain %q", got, " ~~del~~ ")
+	}
+}
+
+func TestConvertADF_BoldWhitespaceOnly(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"   ","marks":[{"type":"strong"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(got, "**") {
+		t.Errorf("got %q, whitespace-only text must not be wrapped in delimiters", got)
+	}
+}
+
+func TestConvertADF_BoldItalicOverlapWithSpaces(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"prefix "},{"type":"text","text":" foo ","marks":[{"type":"em"},{"type":"strong"}]},{"type":"text","text":" suffix"}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, " ***foo*** ") {
+		t.Errorf("got %q, want to contain %q", got, " ***foo*** ")
+	}
+}
+
+func TestConvertADF_PanelHeadingBoldTrailingSpace(t *testing.T) {
+	adf := adfDoc(`{"type":"panel","attrs":{"panelType":"info"},"content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"新しいスペースへようこそ! ","marks":[{"type":"strong"}]}]},{"type":"paragraph","content":[{"type":"text","text":"content"}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "**新しいスペースへようこそ!** ") {
+		t.Errorf("got %q, want NOTE panel heading to render as closed bold", got)
+	}
+	if strings.Contains(got, "! **") {
+		t.Errorf("got %q, regression: literal ** must not appear (original bug)", got)
+	}
+}
+
+// TestConvertADF_CodeBlockInListItem はリスト項目内のコードブロックが出力されることを確認する
+func TestConvertADF_CodeBlockInListItem(t *testing.T) {
+	adf := adfDoc(`{"type":"bulletList","content":[` +
+		`{"type":"listItem","content":[` +
+		`{"type":"paragraph","content":[` + adfText("aaa") + `]},` +
+		`{"type":"codeBlock","content":[` + adfText("echo hi") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "- aaa\n  ```\n  echo hi\n  ```"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+// TestConvertADF_CodeBlockAsFirstListChild は listItem の先頭子要素が codeBlock の場合を確認する
+func TestConvertADF_CodeBlockAsFirstListChild(t *testing.T) {
+	adf := adfDoc(`{"type":"bulletList","content":[` +
+		`{"type":"listItem","content":[` +
+		`{"type":"codeBlock","content":[` + adfText("aaaaaa") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "- ```\n  aaaaaa\n  ```"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+// TestConvertADF_NestedTaskList は入れ子のタスクリストが出力されることを確認する
+func TestConvertADF_NestedTaskList(t *testing.T) {
+	adf := adfDoc(`{"type":"taskList","content":[` +
+		`{"type":"taskItem","attrs":{"state":"TODO"},"content":[` + adfText("親タスク") + `]},` +
+		`{"type":"taskList","content":[` +
+		`{"type":"taskItem","attrs":{"state":"DONE"},"content":[` + adfText("子タスク") + `]}` +
+		`]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "- [ ] 親タスク\n  - [x] 子タスク"
+	if !strings.Contains(got, want) {
+		t.Errorf("got %q, want to contain %q", got, want)
+	}
+}
+
+// TestConvertADF_AdjacentEmphasisRuns は同じ強調マークを持つ隣接テキストが1組のデリミタに結合されることを確認する
+func TestConvertADF_AdjacentEmphasisRuns(t *testing.T) {
+	// 春[strong] は あけ[em] ぼ[textColor+em] の[em] → **春**は*あけぼの*
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"春","marks":[{"type":"strong"}]},` +
+		`{"type":"text","text":"は"},` +
+		`{"type":"text","text":"あけ","marks":[{"type":"em"}]},` +
+		`{"type":"text","text":"ぼ","marks":[{"type":"textColor","attrs":{"color":"#ffc400"}},{"type":"em"}]},` +
+		`{"type":"text","text":"の","marks":[{"type":"em"}]}` +
+		`]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `**春**は*あけ<span style="color: #ffc400">ぼ</span>の*`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestConvertADF_AlignmentCenter は中央寄せ段落が div で包まれることを確認する
+func TestConvertADF_AlignmentCenter(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"center"}}],"content":[` + adfText("あ中央あ") + `]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<div style=\"text-align: center\">\n\nあ中央あ\n\n</div>"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestConvertADF_AlignmentEnd は右寄せ段落が div で包まれることを確認する
+func TestConvertADF_AlignmentEnd(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"end"}}],"content":[` + adfText("右") + `]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "<div style=\"text-align: right\">\n\n右\n\n</div>"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

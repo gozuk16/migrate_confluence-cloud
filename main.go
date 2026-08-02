@@ -141,7 +141,9 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
-	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
+	writer := NewMDWriter(cfg.Output.MarkdownDir, conv, func(accountID string) string {
+		return client.GetUserDisplayName(accountID, cfg.DeletedUsers)
+	})
 
 	var intermediateSaver *IntermediateSaver
 	if saveIntermediate {
@@ -191,7 +193,7 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 	}
 
 	// コメント取得
-	comments, err := client.GetPageFooterComments(pageID)
+	comments, err := client.GetPageFooterCommentsWithReplies(pageID)
 	if err != nil {
 		slog.Warn("コメント取得エラー", "pageID", pageID, "error", err)
 		comments = []Comment{}
@@ -280,7 +282,9 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 
 	client := NewConfluenceClient(cfg.Confluence.URL, cfg.Confluence.Email, cfg.Confluence.APIToken)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
-	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
+	writer := NewMDWriter(cfg.Output.MarkdownDir, conv, func(accountID string) string {
+		return client.GetUserDisplayName(accountID, cfg.DeletedUsers)
+	})
 
 	var intermediateSaver *IntermediateSaver
 	if saveIntermediate {
@@ -338,7 +342,13 @@ func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 
 	intermediateSaver := NewIntermediateSaver(cfg.Output.IntermediateDir)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
-	writer := NewMDWriter(cfg.Output.MarkdownDir, conv)
+	// convert はオフライン変換のため API でのユーザー解決は行わず、deletedUsers マッピングのみで解決する
+	writer := NewMDWriter(cfg.Output.MarkdownDir, conv, func(accountID string) string {
+		if name, ok := cfg.DeletedUsers[accountID]; ok {
+			return name
+		}
+		return accountID
+	})
 
 	// 中間ファイルディレクトリを走査
 	intermediateDir := cfg.Output.IntermediateDir

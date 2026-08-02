@@ -10,15 +10,17 @@ import (
 
 // MDWriter はMarkdownファイルの出力を管理する
 type MDWriter struct {
-	outputDir string
-	converter *Converter
+	outputDir   string
+	converter   *Converter
+	resolveUser func(accountID string) string // accountId → 表示名。nil の場合は解決しない
 }
 
 // NewMDWriter は新しいMDWriterを作成する
-func NewMDWriter(outputDir string, converter *Converter) *MDWriter {
+func NewMDWriter(outputDir string, converter *Converter, resolveUser func(accountID string) string) *MDWriter {
 	return &MDWriter{
-		outputDir: outputDir,
-		converter: converter,
+		outputDir:   outputDir,
+		converter:   converter,
+		resolveUser: resolveUser,
 	}
 }
 
@@ -83,15 +85,50 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 	// コメントセクション
 	if len(comments) > 0 {
 		sb.WriteString("\n## コメント\n\n")
-		for i, comment := range comments {
+		// numbering は各深さのカレント番号を保持する（numbering[0]=トップレベルコメント番号,
+		// numbering[1]=直近の親に対する返信番号, ...）。Depth が浅くなったら深い側をリセットする。
+		numbering := []int{}
+		for _, comment := range comments {
+			depth := comment.Depth
+			if depth < 0 {
+				depth = 0
+			}
+			for len(numbering) <= depth {
+				numbering = append(numbering, 0)
+			}
+			numbering[depth]++
+			numbering = numbering[:depth+1]
+
+			parts := make([]string, len(numbering))
+			for i, n := range numbering {
+				parts[i] = fmt.Sprintf("%d", n)
+			}
+			label := strings.Join(parts, "-")
+
+			headingLevel := 3 + depth
+			if headingLevel > 6 {
+				headingLevel = 6
+			}
+			heading := strings.Repeat("#", headingLevel)
+
 			authorID := comment.Version.AuthorID
 			if authorID == "" {
 				authorID = "unknown"
 			}
+			authorName := authorID
+			if w.resolveUser != nil && authorID != "unknown" {
+				authorName = w.resolveUser(authorID)
+			}
 			createdAt := formatDate(comment.Version.CreatedAt)
 
-			sb.WriteString(fmt.Sprintf("### コメント %d\n\n", i+1))
-			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorID))
+			// Depth>=1 のリプライは div でインデント
+			if depth > 0 {
+				marginLeft := depth * 2
+				sb.WriteString(fmt.Sprintf("<div style=\"margin-left: %dem\">\n\n", marginLeft))
+			}
+
+			sb.WriteString(fmt.Sprintf("%s コメント %s\n\n", heading, label))
+			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorName))
 			sb.WriteString(fmt.Sprintf("**日時:** %s\n\n", createdAt))
 
 			commentMarkdown, err := w.converter.Convert(comment.Body.Storage.Value)
@@ -100,6 +137,11 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			} else {
 				sb.WriteString(commentMarkdown)
 				sb.WriteString("\n\n")
+			}
+
+			// Depth>=1 のリプライは div をクローズ
+			if depth > 0 {
+				sb.WriteString("</div>\n\n")
 			}
 		}
 	}

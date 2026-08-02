@@ -256,6 +256,57 @@ func TestGetPageLabels(t *testing.T) {
 	}
 }
 
+// TestGetPageFooterCommentsWithReplies はGetPageFooterCommentsWithRepliesのテスト
+// 親コメントと、その子コメント（返信）を再帰的に取得しフラットな順序で返すことを確認する
+func TestGetPageFooterCommentsWithReplies(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/pages/12345/footer-comments"):
+			json.NewEncoder(w).Encode(CommentListResponse{
+				Results: []Comment{
+					{ID: "c001", Status: "current"},
+				},
+				Links: Links{},
+			})
+		case strings.Contains(r.URL.Path, "/footer-comments/c001/children"):
+			json.NewEncoder(w).Encode(CommentListResponse{
+				Results: []Comment{
+					{ID: "c002", Status: "current"},
+				},
+				Links: Links{},
+			})
+		case strings.Contains(r.URL.Path, "/footer-comments/c002/children"):
+			json.NewEncoder(w).Encode(CommentListResponse{
+				Results: []Comment{},
+				Links:   Links{},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := newTestConfluenceClient(server.URL)
+	comments, err := client.GetPageFooterCommentsWithReplies("12345")
+
+	if err != nil {
+		t.Fatalf("予期しないエラー: %v", err)
+	}
+
+	if len(comments) != 2 {
+		t.Fatalf("コメント数が期待と異なります\n期待: 2\n実際: %d", len(comments))
+	}
+
+	if comments[0].ID != "c001" || comments[0].Depth != 0 {
+		t.Errorf("親コメントが期待と異なります\n期待: ID=c001, Depth=0\n実際: ID=%s, Depth=%d", comments[0].ID, comments[0].Depth)
+	}
+
+	if comments[1].ID != "c002" || comments[1].Depth != 1 {
+		t.Errorf("返信コメントが期待と異なります\n期待: ID=c002, Depth=1\n実際: ID=%s, Depth=%d", comments[1].ID, comments[1].Depth)
+	}
+}
+
 // TestExtractCursor はextractCursorのテスト
 func TestExtractCursor(t *testing.T) {
 	tests := []struct {

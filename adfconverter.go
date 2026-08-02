@@ -41,16 +41,20 @@ func convertADF(adfJSON string, attachmentMap map[string]string) (string, error)
 		return "", fmt.Errorf("ADF JSONパースエラー: %w", err)
 	}
 	r := &adfRenderer{attachmentMap: attachmentMap}
-	return strings.TrimSpace(r.renderNode(root, 0)), nil
+	return strings.TrimSpace(r.renderNode(root, "")), nil
 }
 
 // renderNode はノードタイプに応じて変換を dispatch する
-func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
+func (r *adfRenderer) renderNode(node ADFNode, indent string) string {
 	switch node.Type {
 	case "doc":
 		return r.renderBlockChildren(node.Content, indent)
 	case "paragraph":
-		return r.renderInlineNodes(node.Content)
+		text := r.renderInlineNodes(node.Content)
+		if align := alignmentStyle(node); align != "" && text != "" {
+			return `<div style="text-align: ` + align + `">` + "\n\n" + text + "\n\n</div>"
+		}
+		return text
 	case "text":
 		return r.renderText(node)
 	case "hardBreak":
@@ -72,7 +76,7 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 	case "table":
 		return r.renderTable(node)
 	case "taskList":
-		return r.renderTaskList(node)
+		return r.renderTaskList(node, indent)
 	case "decisionList":
 		return r.renderDecisionList(node)
 	case "expand", "nestedExpand":
@@ -97,7 +101,7 @@ func (r *adfRenderer) renderNode(node ADFNode, indent int) string {
 }
 
 // renderBlockChildren はブロック要素の子ノードを空行区切りで結合する
-func (r *adfRenderer) renderBlockChildren(nodes []ADFNode, indent int) string {
+func (r *adfRenderer) renderBlockChildren(nodes []ADFNode, indent string) string {
 	var parts []string
 	for _, n := range nodes {
 		if s := r.renderNode(n, indent); s != "" {
@@ -107,11 +111,84 @@ func (r *adfRenderer) renderBlockChildren(nodes []ADFNode, indent int) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// renderInlineNodes はインライン要素を連結する
+// mdDelimiters はデリミタ系マークの正規順序（先頭が最外側）と対応デリミタ
+var mdDelimiters = []struct {
+	mark  string
+	delim string
+}{
+	{"strong", "**"},
+	{"em", "*"},
+	{"strike", "~~"},
+}
+
+// delimiterMarks は text ノードが持つデリミタ系マークを正規順序で返す。
+// code/link/subsup/underline を含むノードと text 以外のノードはグループ化対象外（ok=false）
+func delimiterMarks(node ADFNode) ([]string, bool) {
+	if node.Type != "text" {
+		return nil, false
+	}
+	present := map[string]bool{}
+	for _, m := range node.Marks {
+		switch m.Type {
+		case "strong", "em", "strike":
+			present[m.Type] = true
+		case "code", "link", "subsup", "underline":
+			return nil, false
+		}
+	}
+	var marks []string
+	for _, d := range mdDelimiters {
+		if present[d.mark] {
+			marks = append(marks, d.mark)
+		}
+	}
+	return marks, true
+}
+
+// renderNonDelimiterText はデリミタ系マーク以外を適用したテキストを返す
+// （デリミタ系はグループ単位で renderInlineNodes が適用する）
+func (r *adfRenderer) renderNonDelimiterText(node ADFNode) string {
+	text := node.Text
+	for i := len(node.Marks) - 1; i >= 0; i-- {
+		if node.Marks[i].Type == "textColor" {
+			text = applyTextColor(text, node.Marks[i])
+		}
+	}
+	return text
+}
+
+// renderInlineNodes はインライン要素を連結する。
+// 同じデリミタ系マークを持つ隣接テキストノードは1つのrunに結合してから囲む
 func (r *adfRenderer) renderInlineNodes(nodes []ADFNode) string {
+	delimOf := map[string]string{}
+	for _, d := range mdDelimiters {
+		delimOf[d.mark] = d.delim
+	}
 	var sb strings.Builder
-	for _, n := range nodes {
-		sb.WriteString(r.renderInline(n))
+	for i := 0; i < len(nodes); {
+		marks, ok := delimiterMarks(nodes[i])
+		if !ok {
+			sb.WriteString(r.renderInline(nodes[i]))
+			i++
+			continue
+		}
+		sig := strings.Join(marks, ",")
+		var group strings.Builder
+		j := i
+		for j < len(nodes) {
+			m2, ok2 := delimiterMarks(nodes[j])
+			if !ok2 || strings.Join(m2, ",") != sig {
+				break
+			}
+			group.WriteString(r.renderNonDelimiterText(nodes[j]))
+			j++
+		}
+		text := group.String()
+		for k := len(marks) - 1; k >= 0; k-- {
+			text = wrapDelimiter(text, delimOf[marks[k]])
+		}
+		sb.WriteString(text)
+		i = j
 	}
 	return sb.String()
 }
@@ -140,6 +217,48 @@ func (r *adfRenderer) renderInline(node ADFNode) string {
 	}
 }
 
+// wrapDelimiter は前後の空白をデリミタの外側に保ったまま text をデリミタで囲む
+func wrapDelimiter(text, delimiter string) string {
+	core := strings.Trim(text, " \t\n")
+	if core == "" {
+		return text
+	}
+	start := strings.Index(text, core)
+	lead := text[:start]
+	trail := text[start+len(core):]
+	return lead + delimiter + core + delimiter + trail
+}
+
+// alignmentStyle は段落の alignment マークを CSS text-align 値に変換する
+func alignmentStyle(node ADFNode) string {
+	for _, m := range node.Marks {
+		if m.Type != "alignment" || m.Attrs == nil {
+			continue
+		}
+		switch m.Attrs["align"] {
+		case "center":
+			return "center"
+		case "end":
+			return "right"
+		}
+	}
+	return ""
+}
+
+// colorRe は正当な hex カラー値（#RGB〜#RRGGBBAA）のみを許可する。
+// 未検証の値を HTML 属性へ連結すると属性突破によるスクリプト注入を許してしまうため必須。
+var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{3,8}$`)
+
+// applyTextColor は textColor マークを span タグに変換する。
+// color 値が正規の hex 形式でない場合は span を生成せず text をそのまま返す
+func applyTextColor(text string, mark ADFMark) string {
+	color, _ := mark.Attrs["color"].(string)
+	if color == "" || !colorRe.MatchString(color) {
+		return text
+	}
+	return `<span style="color: ` + color + `">` + text + `</span>`
+}
+
 // renderText はテキストノードにマークを適用して変換する
 func (r *adfRenderer) renderText(node ADFNode) string {
 	text := node.Text
@@ -148,13 +267,13 @@ func (r *adfRenderer) renderText(node ADFNode) string {
 		mark := node.Marks[i]
 		switch mark.Type {
 		case "strong":
-			text = "**" + text + "**"
+			text = wrapDelimiter(text, "**")
 		case "em":
-			text = "*" + text + "*"
+			text = wrapDelimiter(text, "*")
 		case "code":
 			text = "`" + text + "`"
 		case "strike":
-			text = "~~" + text + "~~"
+			text = wrapDelimiter(text, "~~")
 		case "underline":
 			text = "<u>" + text + "</u>"
 		case "link":
@@ -173,7 +292,9 @@ func (r *adfRenderer) renderText(node ADFNode) string {
 				}
 			}
 			text = "<" + tag + ">" + text + "</" + tag + ">"
-		// textColor, backgroundColor, annotation はテキストのみ保持
+		case "textColor":
+			text = applyTextColor(text, mark)
+			// backgroundColor, annotation はテキストのみ保持
 		}
 	}
 	return text
@@ -214,7 +335,7 @@ func (r *adfRenderer) renderHeading(node ADFNode) string {
 	return prefix + " " + r.renderInlineNodes(node.Content)
 }
 
-func (r *adfRenderer) renderBulletList(node ADFNode, indent int) string {
+func (r *adfRenderer) renderBulletList(node ADFNode, indent string) string {
 	var lines []string
 	for _, item := range node.Content {
 		if item.Type == "listItem" {
@@ -224,7 +345,7 @@ func (r *adfRenderer) renderBulletList(node ADFNode, indent int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r *adfRenderer) renderOrderedList(node ADFNode, indent int) string {
+func (r *adfRenderer) renderOrderedList(node ADFNode, indent string) string {
 	var lines []string
 	for i, item := range node.Content {
 		if item.Type == "listItem" {
@@ -234,8 +355,9 @@ func (r *adfRenderer) renderOrderedList(node ADFNode, indent int) string {
 	return strings.Join(lines, "\n")
 }
 
-func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) string {
-	indentStr := strings.Repeat("  ", indent)
+// renderListItem はリスト項目を変換する。子要素のインデントはマーカー幅から算出する
+func (r *adfRenderer) renderListItem(node ADFNode, indent string, prefix string) string {
+	childIndent := indent + strings.Repeat(" ", len(prefix))
 	var lines []string
 	first := true
 	for _, child := range node.Content {
@@ -243,22 +365,33 @@ func (r *adfRenderer) renderListItem(node ADFNode, indent int, prefix string) st
 		case "paragraph":
 			text := r.renderInlineNodes(child.Content)
 			if first {
-				lines = append(lines, indentStr+prefix+text)
+				lines = append(lines, indent+prefix+text)
 				first = false
 			} else {
-				lines = append(lines, indentStr+"  "+text)
+				lines = append(lines, childIndent+text)
 			}
 		case "bulletList":
-			lines = append(lines, r.renderBulletList(child, indent+1))
+			lines = append(lines, r.renderBulletList(child, childIndent))
 		case "orderedList":
-			lines = append(lines, r.renderOrderedList(child, indent+1))
+			lines = append(lines, r.renderOrderedList(child, childIndent))
+		case "codeBlock":
+			blockLines := strings.Split(r.renderCodeBlock(child), "\n")
+			rest := blockLines
+			if first {
+				lines = append(lines, indent+prefix+blockLines[0])
+				rest = blockLines[1:]
+				first = false
+			}
+			for _, bl := range rest {
+				lines = append(lines, childIndent+bl)
+			}
 		}
 	}
 	return strings.Join(lines, "\n")
 }
 
 func (r *adfRenderer) renderBlockquote(node ADFNode) string {
-	inner := r.renderBlockChildren(node.Content, 0)
+	inner := r.renderBlockChildren(node.Content, "")
 	var sb strings.Builder
 	for line := range strings.SplitSeq(inner, "\n") {
 		if line == "" {
@@ -495,10 +628,10 @@ func (r *adfRenderer) renderCellBlock(node ADFNode) string {
 		if s, ok := r.renderNestedTableHTML(node); ok {
 			return s
 		}
-		return strings.TrimSpace(r.renderNode(node, 0))
+		return strings.TrimSpace(r.renderNode(node, ""))
 	default:
 		// 未知のブロック要素は通常変換の結果を採用（改行は renderCellContent が <br> 化する）
-		return strings.TrimSpace(r.renderNode(node, 0))
+		return strings.TrimSpace(r.renderNode(node, ""))
 	}
 }
 
@@ -556,7 +689,7 @@ func (r *adfRenderer) renderPanel(node ADFNode) string {
 	case "success":
 		alertType = "TIP"
 	}
-	inner := r.renderBlockChildren(node.Content, 0)
+	inner := r.renderBlockChildren(node.Content, "")
 	var sb strings.Builder
 	sb.WriteString("> [!" + alertType + "]\n")
 	for line := range strings.SplitSeq(inner, "\n") {
@@ -569,23 +702,26 @@ func (r *adfRenderer) renderPanel(node ADFNode) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func (r *adfRenderer) renderTaskList(node ADFNode) string {
+// renderTaskList はタスクリストを変換する。入れ子の taskList はインデントを深くして再帰する
+func (r *adfRenderer) renderTaskList(node ADFNode, indent string) string {
 	var lines []string
 	for _, item := range node.Content {
-		if item.Type != "taskItem" {
-			continue
-		}
-		state := ""
-		if item.Attrs != nil {
-			if s, ok := item.Attrs["state"].(string); ok {
-				state = s
+		switch item.Type {
+		case "taskItem":
+			state := ""
+			if item.Attrs != nil {
+				if s, ok := item.Attrs["state"].(string); ok {
+					state = s
+				}
 			}
+			check := "- [ ] "
+			if state == "DONE" {
+				check = "- [x] "
+			}
+			lines = append(lines, indent+check+r.renderInlineNodes(item.Content))
+		case "taskList":
+			lines = append(lines, r.renderTaskList(item, indent+"  "))
 		}
-		check := "- [ ] "
-		if state == "DONE" {
-			check = "- [x] "
-		}
-		lines = append(lines, check+r.renderInlineNodes(item.Content))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -607,7 +743,7 @@ func (r *adfRenderer) renderExpand(node ADFNode) string {
 			title = ttl
 		}
 	}
-	inner := r.renderBlockChildren(node.Content, 0)
+	inner := r.renderBlockChildren(node.Content, "")
 	return "<details><summary>" + title + "</summary>\n\n" + inner + "\n\n</details>"
 }
 
@@ -622,24 +758,30 @@ func (r *adfRenderer) renderStatus(node ADFNode) string {
 			text = t
 		}
 	}
-	emoji := statusColorEmoji(color)
-	return emoji + "[" + text + "]"
+	bg, fg := statusColors(color)
+	escapedText := html.EscapeString(text)
+	return fmt.Sprintf(
+		`<span style="display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.85em; font-weight: 600; background-color: %s; color: %s">%s</span>`,
+		bg, fg, escapedText,
+	)
 }
 
-func statusColorEmoji(color string) string {
+// statusColors はConfluenceのstatusマクロのlozenge配色（subtleカラー）を返す
+func statusColors(color string) (bg, fg string) {
 	switch strings.ToLower(color) {
-	case "green":
-		return "🟢"
-	case "yellow":
-		return "🟡"
-	case "red":
-		return "🔴"
-	case "blue":
-		return "🔵"
 	case "purple":
-		return "🟣"
+		return "#eae6ff", "#403294"
+	case "blue":
+		return "#deebff", "#0747a6"
+	case "red":
+		return "#ffebe6", "#bf2600"
+	case "yellow":
+		return "#fff0b3", "#172b4d"
+	case "green":
+		return "#e3fcef", "#006644"
 	default:
-		return "⚫"
+		// "neutral" および未知・空の色は neutral 配色にフォールバック
+		return "#dfe1e6", "#42526e"
 	}
 }
 
@@ -735,7 +877,7 @@ func (r *adfRenderer) renderExtension(node ADFNode) string {
 
 func (r *adfRenderer) renderBodiedExtension(node ADFNode) string {
 	if len(node.Content) > 0 {
-		return r.renderBlockChildren(node.Content, 0)
+		return r.renderBlockChildren(node.Content, "")
 	}
 	return r.renderExtension(node)
 }
