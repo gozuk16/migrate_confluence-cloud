@@ -245,10 +245,15 @@ func alignmentStyle(node ADFNode) string {
 	return ""
 }
 
-// applyTextColor は textColor マークを span タグに変換する
+// colorRe は正当な hex カラー値（#RGB〜#RRGGBBAA）のみを許可する。
+// 未検証の値を HTML 属性へ連結すると属性突破によるスクリプト注入を許してしまうため必須。
+var colorRe = regexp.MustCompile(`^#[0-9a-fA-F]{3,8}$`)
+
+// applyTextColor は textColor マークを span タグに変換する。
+// color 値が正規の hex 形式でない場合は span を生成せず text をそのまま返す
 func applyTextColor(text string, mark ADFMark) string {
 	color, _ := mark.Attrs["color"].(string)
-	if color == "" {
+	if color == "" || !colorRe.MatchString(color) {
 		return text
 	}
 	return `<span style="color: ` + color + `">` + text + `</span>`
@@ -289,7 +294,7 @@ func (r *adfRenderer) renderText(node ADFNode) string {
 			text = "<" + tag + ">" + text + "</" + tag + ">"
 		case "textColor":
 			text = applyTextColor(text, mark)
-		// backgroundColor, annotation はテキストのみ保持
+			// backgroundColor, annotation はテキストのみ保持
 		}
 	}
 	return text

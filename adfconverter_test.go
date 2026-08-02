@@ -156,6 +156,22 @@ func TestConvertADF_TextColorInsideEmphasis(t *testing.T) {
 	}
 }
 
+// TestConvertADF_TextColorInvalidValue は color 値に不正な文字列（HTML属性突破を狙った値）が
+// 与えられた場合に span を生成せず素のテキストを返すことを確認する
+func TestConvertADF_TextColorInvalidValue(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[` +
+		`{"type":"text","text":"危険","marks":[{"type":"textColor","attrs":{"color":"red\"><script>alert(1)</script>"}}]}` +
+		`]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "危険"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestConvertADF_InternalLink(t *testing.T) {
 	adf := adfDoc(`{"type":"paragraph","content":[{"type":"text","text":"page","marks":[{"type":"link","attrs":{"href":"https://example.atlassian.net/wiki/spaces/KEY/pages/12345/My%20Page"}}]}]}`)
 	got, err := convertADF(adf, nil)
@@ -407,6 +423,29 @@ func TestConvertADF_TableSingleRow(t *testing.T) {
 	}
 	if !strings.Contains(got, "| X |") {
 		t.Errorf("got %q, want cell", got)
+	}
+}
+
+// TestConvertADF_TableCellAlignmentNoDiv はテーブルセル内の alignment マークが
+// 段落と同様の div ラップ対象にならない（列の GFM アライメントのみで表現される）ことを確認する
+func TestConvertADF_TableCellAlignmentNoDiv(t *testing.T) {
+	adf := adfDoc(`{"type":"table","content":[
+        {"type":"tableRow","content":[
+            {"type":"tableCell","content":[{"type":"paragraph","marks":[{"type":"alignment","attrs":{"align":"center"}}],"content":[{"type":"text","text":"Centered"}]}]}
+        ]}
+    ]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(got, "<div") {
+		t.Errorf("got %q, table cell content should not contain div for alignment", got)
+	}
+	if !strings.Contains(got, ":---:") {
+		t.Errorf("got %q, want centered column alignment separator", got)
+	}
+	if !strings.Contains(got, "| Centered |") {
+		t.Errorf("got %q, want cell content", got)
 	}
 }
 

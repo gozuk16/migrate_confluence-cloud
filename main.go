@@ -342,6 +342,7 @@ func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 
 	intermediateSaver := NewIntermediateSaver(cfg.Output.IntermediateDir)
 	conv := NewConverter(cfg.Display.IgnoredMacros, cfg.DeletedUsers)
+	// convert はオフライン変換のため API でのユーザー解決は行わず、deletedUsers マッピングのみで解決する
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv, func(accountID string) string {
 		if name, ok := cfg.DeletedUsers[accountID]; ok {
 			return name
