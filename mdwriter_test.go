@@ -257,3 +257,59 @@ func TestMDWriter_WritePage_ResolvesCommentAuthor(t *testing.T) {
 		t.Errorf("投稿者が表示名に解決されていません\n内容: %q", string(content))
 	}
 }
+
+// TestMDWriter_WritePage_WithCommentReplies は返信コメント（子コメント）の見出し階層のテスト
+func TestMDWriter_WritePage_WithCommentReplies(t *testing.T) {
+	tmpDir := t.TempDir()
+	writer := newTestMDWriter(tmpDir)
+
+	page := &Page{
+		ID:    "12345",
+		Title: "返信付きページ",
+		Body: PageBody{
+			Storage: Storage{Value: "<p>本文</p>"},
+			AtlasDocFormat: AtlasDocFormat{
+				Value:          `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"本文"}]}]}`,
+				Representation: "atlas_doc_format",
+			},
+		},
+		Version: Version{Number: 1, CreatedAt: "2024-01-01T00:00:00.000Z"},
+	}
+
+	comments := []Comment{
+		{
+			ID:      "c001",
+			Depth:   0,
+			Body:    CommentBody{Storage: Storage{Value: "<p>親コメント</p>"}},
+			Version: Version{CreatedAt: "2024-01-02T00:00:00.000Z", AuthorID: "user123"},
+		},
+		{
+			ID:      "c002",
+			Depth:   1,
+			Body:    CommentBody{Storage: Storage{Value: "<p>返信コメント</p>"}},
+			Version: Version{CreatedAt: "2024-01-03T00:00:00.000Z", AuthorID: "user456"},
+		},
+	}
+
+	err := writer.WritePage(page, "TEST", "テストスペース", "", nil, comments, nil)
+	if err != nil {
+		t.Fatalf("WritePage エラー: %v", err)
+	}
+
+	mdPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "index.md")
+	content, err := os.ReadFile(mdPath)
+	if err != nil {
+		t.Fatalf("ファイル読み込みエラー: %v", err)
+	}
+	contentStr := string(content)
+
+	if !strings.Contains(contentStr, "### コメント 1\n\n") {
+		t.Errorf("親コメントの見出しが期待と異なります\n内容: %q", contentStr)
+	}
+	if !strings.Contains(contentStr, "#### コメント 1-1\n\n") {
+		t.Errorf("返信コメントの見出しが期待と異なります\n内容: %q", contentStr)
+	}
+	if !strings.Contains(contentStr, "返信コメント") {
+		t.Errorf("返信コメントの本文が含まれていません\n内容: %q", contentStr)
+	}
+}

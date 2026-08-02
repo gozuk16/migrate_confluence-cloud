@@ -104,6 +104,9 @@ type Comment struct {
 	Body    CommentBody `json:"body"`
 	Version Version     `json:"version"`
 	PageID  string      `json:"pageId"`
+	// Depth はコメントツリーの深さ（トップレベル=0、返信はその親+1）。
+	// APIレスポンスには含まれず、GetPageFooterCommentsWithReplies が計算する。
+	Depth int `json:"-"`
 }
 
 // CommentBody はコメントのボディコンテンツ
@@ -402,6 +405,93 @@ func (cc *ConfluenceClient) GetPageFooterComments(pageID string) ([]Comment, err
 	}
 
 	return allComments, nil
+}
+
+// GetFooterCommentChildren はフッターコメントの子コメント（返信）一覧を取得する
+func (cc *ConfluenceClient) GetFooterCommentChildren(commentID string) ([]Comment, error) {
+	var allComments []Comment
+	cursor := ""
+
+	for {
+		apiURL := fmt.Sprintf("%s/wiki/api/v2/footer-comments/%s/children?body-format=storage&limit=250", cc.baseURL, commentID)
+		if cursor != "" {
+			apiURL += "&cursor=" + url.QueryEscape(cursor)
+		}
+
+		body, err := cc.doRequest("GET", apiURL)
+		if err != nil {
+			return nil, fmt.Errorf("コメント返信取得エラー (commentID: %s): %w", commentID, err)
+		}
+
+		var resp CommentListResponse
+		if err := json.Unmarshal(body, &resp); err != nil {
+			return nil, fmt.Errorf("コメント返信JSONパースエラー (commentID: %s): %w", commentID, err)
+		}
+
+		allComments = append(allComments, resp.Results...)
+
+		if resp.Links.Next == "" {
+			break
+		}
+		cursor = extractCursor(resp.Links.Next)
+		if cursor == "" {
+			break
+		}
+	}
+
+	return allComments, nil
+}
+
+// maxCommentReplyDepth は返信コメントを再帰取得する際の最大深さ（循環参照対策）
+const maxCommentReplyDepth = 10
+
+// GetPageFooterCommentsWithReplies はページのフッターコメントを、返信（子コメント）を含めて
+// 深さ優先でフラットに取得する（親コメント→その返信を再帰的に→次の親コメント、の順）
+func (cc *ConfluenceClient) GetPageFooterCommentsWithReplies(pageID string) ([]Comment, error) {
+	topLevelComments, err := cc.GetPageFooterComments(pageID)
+	if err != nil {
+		return nil, err
+	}
+
+	var allComments []Comment
+	for _, comment := range topLevelComments {
+		comment.Depth = 0
+		allComments = append(allComments, comment)
+
+		replies, err := cc.collectCommentReplies(comment.ID, 1)
+		if err != nil {
+			return nil, err
+		}
+		allComments = append(allComments, replies...)
+	}
+
+	return allComments, nil
+}
+
+// collectCommentReplies は指定コメントの返信を深さ優先で再帰的に取得する
+func (cc *ConfluenceClient) collectCommentReplies(commentID string, depth int) ([]Comment, error) {
+	if depth > maxCommentReplyDepth {
+		return nil, nil
+	}
+
+	children, err := cc.GetFooterCommentChildren(commentID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []Comment
+	for _, child := range children {
+		child.Depth = depth
+		result = append(result, child)
+
+		grandChildren, err := cc.collectCommentReplies(child.ID, depth+1)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, grandChildren...)
+	}
+
+	return result, nil
 }
 
 // GetPageLabels はページのラベル一覧を取得する

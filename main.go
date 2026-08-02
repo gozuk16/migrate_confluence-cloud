@@ -193,7 +193,7 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 	}
 
 	// コメント取得
-	comments, err := client.GetPageFooterComments(pageID)
+	comments, err := client.GetPageFooterCommentsWithReplies(pageID)
 	if err != nil {
 		slog.Warn("コメント取得エラー", "pageID", pageID, "error", err)
 		comments = []Comment{}

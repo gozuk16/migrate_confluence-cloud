@@ -85,7 +85,32 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 	// コメントセクション
 	if len(comments) > 0 {
 		sb.WriteString("\n## コメント\n\n")
-		for i, comment := range comments {
+		// numbering は各深さのカレント番号を保持する（numbering[0]=トップレベルコメント番号,
+		// numbering[1]=直近の親に対する返信番号, ...）。Depth が浅くなったら深い側をリセットする。
+		numbering := []int{}
+		for _, comment := range comments {
+			depth := comment.Depth
+			if depth < 0 {
+				depth = 0
+			}
+			for len(numbering) <= depth {
+				numbering = append(numbering, 0)
+			}
+			numbering[depth]++
+			numbering = numbering[:depth+1]
+
+			parts := make([]string, len(numbering))
+			for i, n := range numbering {
+				parts[i] = fmt.Sprintf("%d", n)
+			}
+			label := strings.Join(parts, "-")
+
+			headingLevel := 3 + depth
+			if headingLevel > 6 {
+				headingLevel = 6
+			}
+			heading := strings.Repeat("#", headingLevel)
+
 			authorID := comment.Version.AuthorID
 			if authorID == "" {
 				authorID = "unknown"
@@ -96,7 +121,7 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			}
 			createdAt := formatDate(comment.Version.CreatedAt)
 
-			sb.WriteString(fmt.Sprintf("### コメント %d\n\n", i+1))
+			sb.WriteString(fmt.Sprintf("%s コメント %s\n\n", heading, label))
 			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorName))
 			sb.WriteString(fmt.Sprintf("**日時:** %s\n\n", createdAt))
 
