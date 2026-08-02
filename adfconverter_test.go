@@ -499,14 +499,15 @@ func TestConvertADF_Expand(t *testing.T) {
 func TestConvertADF_Status(t *testing.T) {
 	tests := []struct {
 		color string
-		emoji string
+		bg    string
+		fg    string
 	}{
-		{"green", "🟢"},
-		{"red", "🔴"},
-		{"yellow", "🟡"},
-		{"blue", "🔵"},
-		{"purple", "🟣"},
-		{"neutral", "⚫"},
+		{"neutral", "#dfe1e6", "#42526e"},
+		{"purple", "#eae6ff", "#403294"},
+		{"blue", "#deebff", "#0747a6"},
+		{"red", "#ffebe6", "#bf2600"},
+		{"yellow", "#fff0b3", "#172b4d"},
+		{"green", "#e3fcef", "#006644"},
 	}
 	for _, tt := range tests {
 		adf := adfDoc(fmt.Sprintf(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"%s","text":"OK"}}]}`, tt.color))
@@ -514,12 +515,46 @@ func TestConvertADF_Status(t *testing.T) {
 		if err != nil {
 			t.Fatalf("color %s: unexpected error: %v", tt.color, err)
 		}
-		if !strings.Contains(got, tt.emoji) {
-			t.Errorf("color %s: got %q, want emoji %s", tt.color, got, tt.emoji)
+		if !strings.Contains(got, "background-color: "+tt.bg) {
+			t.Errorf("color %s: got %q, want background-color %s", tt.color, got, tt.bg)
 		}
-		if !strings.Contains(got, "[OK]") {
-			t.Errorf("color %s: got %q, want [OK]", tt.color, got)
+		if !strings.Contains(got, "color: "+tt.fg) {
+			t.Errorf("color %s: got %q, want color %s", tt.color, got, tt.fg)
 		}
+		if !strings.Contains(got, ">OK</span>") {
+			t.Errorf("color %s: got %q, want text OK inside span", tt.color, got)
+		}
+	}
+}
+
+// TestConvertADF_Status_UnknownColorFallsBackToNeutral は未知の color 値が neutral 配色に
+// フォールバックすることを確認する
+func TestConvertADF_Status_UnknownColorFallsBackToNeutral(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"mystery","text":"OK"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "background-color: #dfe1e6") {
+		t.Errorf("got %q, want neutral background-color #dfe1e6", got)
+	}
+	if !strings.Contains(got, "color: #42526e") {
+		t.Errorf("got %q, want neutral color #42526e", got)
+	}
+}
+
+// TestConvertADF_Status_EscapesText はstatusのtextに含まれるHTMLがエスケープされることを確認する
+func TestConvertADF_Status_EscapesText(t *testing.T) {
+	adf := adfDoc(`{"type":"paragraph","content":[{"type":"status","attrs":{"color":"green","text":"<script>alert(1)</script>"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "&lt;script&gt;") {
+		t.Errorf("got %q, want escaped script tag", got)
+	}
+	if strings.Contains(got, "<script>") {
+		t.Errorf("got %q, unescaped script tag present", got)
 	}
 }
 

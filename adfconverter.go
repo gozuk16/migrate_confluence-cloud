@@ -758,24 +758,30 @@ func (r *adfRenderer) renderStatus(node ADFNode) string {
 			text = t
 		}
 	}
-	emoji := statusColorEmoji(color)
-	return emoji + "[" + text + "]"
+	bg, fg := statusColors(color)
+	escapedText := html.EscapeString(text)
+	return fmt.Sprintf(
+		`<span style="display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 0.85em; font-weight: 600; background-color: %s; color: %s">%s</span>`,
+		bg, fg, escapedText,
+	)
 }
 
-func statusColorEmoji(color string) string {
+// statusColors はConfluenceのstatusマクロのlozenge配色（subtleカラー）を返す
+func statusColors(color string) (bg, fg string) {
 	switch strings.ToLower(color) {
-	case "green":
-		return "🟢"
-	case "yellow":
-		return "🟡"
-	case "red":
-		return "🔴"
-	case "blue":
-		return "🔵"
 	case "purple":
-		return "🟣"
+		return "#eae6ff", "#403294"
+	case "blue":
+		return "#deebff", "#0747a6"
+	case "red":
+		return "#ffebe6", "#bf2600"
+	case "yellow":
+		return "#fff0b3", "#172b4d"
+	case "green":
+		return "#e3fcef", "#006644"
 	default:
-		return "⚫"
+		// "neutral" および未知・空の色は neutral 配色にフォールバック
+		return "#dfe1e6", "#42526e"
 	}
 }
 
