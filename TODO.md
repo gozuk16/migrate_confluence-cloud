@@ -37,6 +37,7 @@
 - [x] ADF強調マーク（strong/em/strike）の前後空白によるMarkdown崩れ修正
   - wrapDelimiter ヘルパー追加（前後空白をデリミタ外に退避）
   - NOTEパネル内などで前後空白付きテキストを太字/斜体/取り消し線にした際にリテラル `**` 表示される不具合を解消
+- [x] 目次（toc）マクロのHugoショートコード変換対応（`{{< toc >}}` + toc.htmlショートコード追加）
 - [x] コメントリプライ取得とstatusバッジ修正（PR #9に追加）
   - フッターコメントのリプライを `/footer-comments/{id}/children` から再帰取得し階層見出しで出力
   - リプライを深さに応じて `<div style="margin-left: {N}em">` でインデント表示
