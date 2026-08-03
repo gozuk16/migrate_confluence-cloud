@@ -651,6 +651,28 @@ func TestConvertADF_BodiedExtensionWithContent(t *testing.T) {
 	}
 }
 
+func TestConvertADF_TocMacro(t *testing.T) {
+	adf := adfDoc(`{"type":"extension","attrs":{"extensionType":"com.atlassian.confluence.macro.core","extensionKey":"toc"}}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "{{< toc >}}") {
+		t.Errorf("got %q, want to contain {{< toc >}}", got)
+	}
+}
+
+func TestConvertADF_ExtensionNonToc(t *testing.T) {
+	adf := adfDoc(`{"type":"extension","attrs":{"extensionKey":"jira"}}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "<!-- macro: jira -->") {
+		t.Errorf("got %q, want macro comment for non-toc extension", got)
+	}
+}
+
 func TestConvertADF_InlineCard(t *testing.T) {
 	adf := adfDoc(`{"type":"paragraph","content":[{"type":"inlineCard","attrs":{"url":"https://example.com"}}]}`)
 	got, err := convertADF(adf, nil)

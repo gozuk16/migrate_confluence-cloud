@@ -872,6 +872,9 @@ func (r *adfRenderer) renderExtension(node ADFNode) string {
 			key = k
 		}
 	}
+	if key == "toc" {
+		return "{{< toc >}}"
+	}
 	return "<!-- macro: " + key + " -->"
 }
 
