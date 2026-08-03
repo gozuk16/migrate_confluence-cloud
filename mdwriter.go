@@ -109,7 +109,6 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			if headingLevel > 6 {
 				headingLevel = 6
 			}
-			heading := strings.Repeat("#", headingLevel)
 
 			authorID := comment.Version.AuthorID
 			if authorID == "" {
@@ -127,7 +126,8 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 				sb.WriteString(fmt.Sprintf("<div style=\"margin-left: %dem\">\n\n", marginLeft))
 			}
 
-			sb.WriteString(fmt.Sprintf("%s コメント %s\n\n", heading, label))
+			// 個別コメント見出しを HTML タグで出力（目次から除外）
+			sb.WriteString(fmt.Sprintf("<h%d>コメント %s</h%d>\n\n", headingLevel, label, headingLevel))
 			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorName))
 			sb.WriteString(fmt.Sprintf("**日時:** %s\n\n", createdAt))
 
