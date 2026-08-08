@@ -48,6 +48,67 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	return nil
 }
 
+// WriteFolder はConfluenceのフォルダを「レンダリングされないページ」スタブとして書き出す。
+// Hugoの build.render = "never" によりURLもHTMLも生成されないが、
+// list = "always" によりテンプレートのページ一覧には現れるため、サイドバーのツリーに使える。
+func (w *MDWriter) WriteFolder(folder *Folder, spaceKey, spaceTitle string) error {
+	folderDir, err := w.folderDir(folder, spaceKey)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(folderDir, 0755); err != nil {
+		return fmt.Errorf("フォルダディレクトリの作成に失敗しました: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("+++\n")
+	sb.WriteString(fmt.Sprintf("title = %q\n", folder.Title))
+	sb.WriteString(fmt.Sprintf("space = %q\n", spaceKey))
+	if spaceTitle != "" {
+		sb.WriteString(fmt.Sprintf("space_title = %q\n", spaceTitle))
+	}
+	sb.WriteString(fmt.Sprintf("page_id = %q\n", folder.ID))
+	if folder.ParentID != "" {
+		sb.WriteString(fmt.Sprintf("parent_id = %q\n", folder.ParentID))
+	}
+	sb.WriteString(fmt.Sprintf("weight = %d\n", frontMatterWeight(folder.Position)))
+	sb.WriteString("is_folder = true\n")
+	sb.WriteString("[build]\n")
+	sb.WriteString("  render = \"never\"\n")
+	sb.WriteString("  list = \"always\"\n")
+	sb.WriteString("+++\n")
+
+	mdPath := filepath.Join(folderDir, "index.md")
+	if err := os.WriteFile(mdPath, []byte(sb.String()), 0644); err != nil {
+		return fmt.Errorf("フォルダスタブ書き出しエラー: %w", err)
+	}
+
+	return nil
+}
+
+// folderDir はフォルダスタブの出力先ディレクトリを返す。
+// 同名ディレクトリに既にフォルダ以外のindex.mdがある場合は、
+// ページを上書きしないよう "<タイトル>_<フォルダID>" にフォールバックする。
+func (w *MDWriter) folderDir(folder *Folder, spaceKey string) (string, error) {
+	safeTitle := sanitizeFilename(folder.Title)
+	dir := filepath.Join(w.outputDir, spaceKey, safeTitle)
+
+	data, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return dir, nil // 未使用のディレクトリ名なのでそのまま使う
+		}
+		return "", fmt.Errorf("既存ファイルの確認に失敗しました (%s): %w", dir, err)
+	}
+
+	// 自分自身のスタブなら同じディレクトリを再利用する（再実行時の冪等性）
+	if strings.Contains(string(data), fmt.Sprintf("page_id = %q", folder.ID)) {
+		return dir, nil
+	}
+
+	return filepath.Join(w.outputDir, spaceKey, fmt.Sprintf("%s_%s", safeTitle, folder.ID)), nil
+}
+
 // generateContent はMarkdownコンテンツ全体を生成する
 func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label, comments []Comment, attachments []Attachment) (string, error) {
 	var sb strings.Builder

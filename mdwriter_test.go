@@ -419,3 +419,124 @@ func TestMDWriter_FrontMatterHierarchy(t *testing.T) {
 		}
 	})
 }
+
+func TestMDWriter_WriteFolder(t *testing.T) {
+	t.Run("フォルダスタブが出力される", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		folder := &Folder{
+			ID:         "555",
+			Title:      "設計ドキュメント",
+			ParentID:   "1",
+			ParentType: "page",
+			Position:   intPtr(2),
+		}
+
+		if err := writer.WriteFolder(folder, "TEST", "テストスペース"); err != nil {
+			t.Fatalf("WriteFolder エラー: %v", err)
+		}
+
+		mdPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(folder.Title), "index.md")
+		data, err := os.ReadFile(mdPath)
+		if err != nil {
+			t.Fatalf("読み込みエラー: %v", err)
+		}
+		content := string(data)
+
+		for _, want := range []string{
+			`title = "設計ドキュメント"`,
+			`page_id = "555"`,
+			`parent_id = "1"`,
+			`weight = 3`,
+			`is_folder = true`,
+			`space = "TEST"`,
+			`space_title = "テストスペース"`,
+			`[build]`,
+			`render = "never"`,
+			`list = "always"`,
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("スタブに %q が含まれていません:\n%s", want, content)
+			}
+		}
+	})
+
+	t.Run("親がない場合はparent_idを出力しない", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		folder := &Folder{ID: "555", Title: "ルートフォルダ"}
+
+		if err := writer.WriteFolder(folder, "TEST", ""); err != nil {
+			t.Fatalf("WriteFolder エラー: %v", err)
+		}
+
+		mdPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(folder.Title), "index.md")
+		data, err := os.ReadFile(mdPath)
+		if err != nil {
+			t.Fatalf("読み込みエラー: %v", err)
+		}
+		if strings.Contains(string(data), "parent_id") {
+			t.Errorf("parent_id が出力されています:\n%s", string(data))
+		}
+	})
+
+	t.Run("同名ページが既にある場合はID付きディレクトリにフォールバックする", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		// 先に同名のページを書く
+		page := &Page{
+			ID:      "1",
+			Title:   "重複名",
+			SpaceID: "67890",
+			Body: PageBody{
+				AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`},
+			},
+		}
+		if err := writer.WritePage(page, "TEST", "テストスペース", "", nil, nil, nil); err != nil {
+			t.Fatalf("WritePage エラー: %v", err)
+		}
+
+		folder := &Folder{ID: "555", Title: "重複名"}
+		if err := writer.WriteFolder(folder, "TEST", "テストスペース"); err != nil {
+			t.Fatalf("WriteFolder エラー: %v", err)
+		}
+
+		// ページ側は上書きされていない
+		pageData, err := os.ReadFile(filepath.Join(tmpDir, "TEST", "重複名", "index.md"))
+		if err != nil {
+			t.Fatalf("ページ読み込みエラー: %v", err)
+		}
+		if strings.Contains(string(pageData), "is_folder") {
+			t.Errorf("ページがフォルダスタブに上書きされました:\n%s", string(pageData))
+		}
+
+		// フォルダはID付きディレクトリに出ている
+		folderData, err := os.ReadFile(filepath.Join(tmpDir, "TEST", "重複名_555", "index.md"))
+		if err != nil {
+			t.Fatalf("フォルダスタブが見つかりません: %v", err)
+		}
+		if !strings.Contains(string(folderData), "is_folder = true") {
+			t.Errorf("フォルダスタブの内容が不正です:\n%s", string(folderData))
+		}
+	})
+
+	t.Run("同じフォルダを2回書いても同じディレクトリを使う", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		folder := &Folder{ID: "555", Title: "再実行フォルダ"}
+		if err := writer.WriteFolder(folder, "TEST", ""); err != nil {
+			t.Fatalf("1回目 WriteFolder エラー: %v", err)
+		}
+		if err := writer.WriteFolder(folder, "TEST", ""); err != nil {
+			t.Fatalf("2回目 WriteFolder エラー: %v", err)
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "TEST", "再実行フォルダ_555")); err == nil {
+			t.Error("2回目の実行でID付きディレクトリが作られました（冪等ではありません）")
+		}
+	})
+}
