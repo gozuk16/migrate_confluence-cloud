@@ -87,8 +87,12 @@ func (w *MDWriter) WriteFolder(folder *Folder, spaceKey, spaceTitle string) erro
 }
 
 // folderDir はフォルダスタブの出力先ディレクトリを返す。
-// 同名ディレクトリに既にフォルダ以外のindex.mdがある場合は、
-// ページを上書きしないよう "<タイトル>_<フォルダID>" にフォールバックする。
+// 同名ディレクトリに既にページやフォルダが存在する場合、
+// 安全性を最優先に以下の順で判定する:
+// 1. ファイルが存在しない → プライマリディレクトリを使用
+// 2. ファイルが自分自身のスタブ（同じ page_id で is_folder=true） → プライマリディレクトリを再利用（冪等性）
+// 3. ファイルが別コンテンツ → フォールバック "<タイトル>_<フォルダID>" を試す
+// 4. フォールバックも使えない → エラー（データ破損を避けるため黙って上書きしない）
 func (w *MDWriter) folderDir(folder *Folder, spaceKey string) (string, error) {
 	safeTitle := sanitizeFilename(folder.Title)
 	dir := filepath.Join(w.outputDir, spaceKey, safeTitle)
@@ -102,11 +106,60 @@ func (w *MDWriter) folderDir(folder *Folder, spaceKey string) (string, error) {
 	}
 
 	// 自分自身のスタブなら同じディレクトリを再利用する（再実行時の冪等性）
-	if strings.Contains(string(data), fmt.Sprintf("page_id = %q", folder.ID)) {
+	if isSelfFolderStub(data, folder.ID) {
 		return dir, nil
 	}
 
-	return filepath.Join(w.outputDir, spaceKey, fmt.Sprintf("%s_%s", safeTitle, folder.ID)), nil
+	// プライマリは使えない。フォールバック先を試す
+	fallbackDir := filepath.Join(w.outputDir, spaceKey, fmt.Sprintf("%s_%s", safeTitle, folder.ID))
+	fallbackData, err := os.ReadFile(filepath.Join(fallbackDir, "index.md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fallbackDir, nil // フォールバックが未使用なので使用可
+		}
+		return "", fmt.Errorf("フォールバックディレクトリの確認に失敗しました (%s): %w", fallbackDir, err)
+	}
+
+	// フォールバック先も存在する。自分自身のスタブか確認
+	if isSelfFolderStub(fallbackData, folder.ID) {
+		return fallbackDir, nil
+	}
+
+	// プライマリもフォールバックも他人のコンテンツを持っている
+	return "", fmt.Errorf("フォルダ %q を出力できるディレクトリがありません: プライマリ %q と フォールバック %q の両方にコンテンツが存在しています", folder.Title, dir, fallbackDir)
+}
+
+// isSelfFolderStub は、与えられたファイルデータが「このフォルダ自身のスタブ」かどうかを判定する。
+// フロントマター内に page_id が一致し、かつ is_folder = true がある場合のみ true を返す。
+// これにより、他の無関係なページの本文中に偶然 page_id という文字列が含まれていても
+// 誤認を防ぐことができる。
+func isSelfFolderStub(data []byte, folderID string) bool {
+	frontMatter := extractFrontMatter(data)
+	if frontMatter == "" {
+		return false // フロントマターがない、または壊れている
+	}
+
+	// フロントマター内に page_id と is_folder = true の両方が含まれるか確認
+	pageIDMatch := fmt.Sprintf("page_id = %q", folderID)
+	return strings.Contains(frontMatter, pageIDMatch) && strings.Contains(frontMatter, "is_folder = true")
+}
+
+// extractFrontMatter はMarkdownファイルのフロントマター（最初の +++ から次の +++ まで）を抽出する。
+// フロントマターが無い場合や壊れている場合は空文字列を返す。
+func extractFrontMatter(data []byte) string {
+	s := string(data)
+	if !strings.HasPrefix(s, "+++\n") {
+		return "" // フロントマターが存在しない
+	}
+
+	// 最初の "+++" をスキップして、次の "+++" を探す
+	rest := s[4:] // "+++\n" の4文字をスキップ
+	idx := strings.Index(rest, "\n+++")
+	if idx == -1 {
+		return "" // 閉じの "+++" が見つからない（壊れたファイル）
+	}
+
+	return rest[:idx] // フロントマター内容（最後の改行含む）
 }
 
 // generateContent はMarkdownコンテンツ全体を生成する

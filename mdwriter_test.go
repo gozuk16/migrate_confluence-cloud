@@ -539,4 +539,93 @@ func TestMDWriter_WriteFolder(t *testing.T) {
 			t.Error("2回目の実行でID付きディレクトリが作られました（冪等ではありません）")
 		}
 	})
+
+	t.Run("ページ本文中のpage_idは誤認されない", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		// ページの本文中に page_id = "555" が含まれているページを先に書く
+		page := &Page{
+			ID:      "1",
+			Title:   "技術解説ページ",
+			SpaceID: "67890",
+			Body: PageBody{
+				AtlasDocFormat: AtlasDocFormat{
+					Value: `{"version":1,"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"このページではpage_id = \"555\"について説明します"}]}]}`,
+				},
+			},
+		}
+		if err := writer.WritePage(page, "TEST", "", "", nil, nil, nil); err != nil {
+			t.Fatalf("WritePage エラー: %v", err)
+		}
+
+		// 同じタイトルのフォルダ（別ID）を書く
+		folder := &Folder{ID: "555", Title: "技術解説ページ"}
+		if err := writer.WriteFolder(folder, "TEST", ""); err != nil {
+			t.Fatalf("WriteFolder エラー: %v", err)
+		}
+
+		// ページが上書きされていないことを確認（フロントマターに is_folder がない）
+		pageData, err := os.ReadFile(filepath.Join(tmpDir, "TEST", "技術解説ページ", "index.md"))
+		if err != nil {
+			t.Fatalf("ページ読み込みエラー: %v", err)
+		}
+		if strings.Contains(string(pageData), "is_folder") {
+			t.Errorf("ページがフォルダスタブに上書きされました:\n%s", string(pageData))
+		}
+
+		// フォルダはID付きディレクトリに出ている
+		folderData, err := os.ReadFile(filepath.Join(tmpDir, "TEST", "技術解説ページ_555", "index.md"))
+		if err != nil {
+			t.Fatalf("フォルダスタブが見つかりません: %v", err)
+		}
+		if !strings.Contains(string(folderData), "is_folder = true") {
+			t.Errorf("フォルダスタブの内容が不正です:\n%s", string(folderData))
+		}
+	})
+
+	t.Run("フォールバック先にも別コンテンツがある場合はエラーを返す", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		// プライマリディレクトリにページを作成
+		page1 := &Page{
+			ID:      "1",
+			Title:   "同名ページ",
+			SpaceID: "67890",
+			Body:    PageBody{AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`}},
+		}
+		if err := writer.WritePage(page1, "TEST", "", "", nil, nil, nil); err != nil {
+			t.Fatalf("WritePage エラー: %v", err)
+		}
+
+		// フォールバックディレクトリにも別のページを作成
+		if err := os.MkdirAll(filepath.Join(tmpDir, "TEST", "同名ページ_555"), 0755); err != nil {
+			t.Fatalf("フォールバックディレクトリ作成エラー: %v", err)
+		}
+		fallbackPath := filepath.Join(tmpDir, "TEST", "同名ページ_555", "index.md")
+		if err := os.WriteFile(fallbackPath, []byte("+++\ntitle = \"別の内容\"\n+++\n"), 0644); err != nil {
+			t.Fatalf("フォールバック先への書き込みエラー: %v", err)
+		}
+
+		// フォルダを書こうとする
+		folder := &Folder{ID: "555", Title: "同名ページ"}
+		err := writer.WriteFolder(folder, "TEST", "")
+
+		// エラーが返されることを確認
+		if err == nil {
+			t.Error("WriteFolder がエラーを返すべきですが、成功してしまいました")
+		}
+
+		// プライマリとフォールバック先の両方のコンテンツが保護されていることを確認
+		page1Data, _ := os.ReadFile(filepath.Join(tmpDir, "TEST", "同名ページ", "index.md"))
+		if strings.Contains(string(page1Data), "is_folder") {
+			t.Errorf("プライマリがフォルダスタブに上書きされました:\n%s", string(page1Data))
+		}
+
+		fallbackData, _ := os.ReadFile(fallbackPath)
+		if strings.Contains(string(fallbackData), "is_folder") {
+			t.Errorf("フォールバックがフォルダスタブに上書きされました:\n%s", string(fallbackData))
+		}
+	})
 }
