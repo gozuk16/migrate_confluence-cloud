@@ -31,7 +31,7 @@ Confluence API v2
         ↓
 Go移行ツール
   ├─ ページ: フロントマターに parent_id / weight を追加
-  └─ フォルダ: 非表示ページ（_build.render = "never"）として出力
+  └─ フォルダ: 非表示ページ（build.render = "never"）として出力
         ↓
 Hugoテーマ
   └─ sidebar-left.html → 再帰パーシャルで parent_id を辿りツリー描画
@@ -64,13 +64,13 @@ page_id = "12345"        # フォルダIDを統一キーとして格納
 parent_id = "..."        # ルート直下なら出力しない
 weight = 2
 is_folder = true
-[_build]
+[build]                  # Hugo v0.145以降の現行キー（旧 _build）
   render = "never"       # URLを持たず、HTMLも生成されない
   list = "always"        # ただしテンプレートのページ一覧には現れる
 ```
 
 - フォルダのディレクトリ名はページと同じ命名規則を使う。既存のページ・フォルダと衝突する場合のみIDサフィックスを付ける（レンダリングされないためURLに影響しない）
-- `weight` はHugoで0が「未設定」扱いになるため、`weight = position + 1` として必ず1以上になるよう変換する。positionが取得できない場合はタイトル順の連番で代替する
+- `weight` は `position + 1` とする（Hugoのweight昇順ソートでは0が先頭に来てしまうため、必ず1以上にする）。positionがnull・未取得の場合は `weight = 9999` として末尾に寄せる。同一weightのタイトル順は二段ソートで安定させる
 
 ## テーマ側の変更（hugo-theme-docs）
 
