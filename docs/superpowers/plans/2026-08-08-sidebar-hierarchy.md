@@ -1472,13 +1472,24 @@ weight = 3
 親が見つからないためルート直下に出るはずのページ。
 ```
 
+**重要 — このブランチでは `hugo-site` をそのままビルドできない**
+
+作業ツリーにある `hugo-site/content/SCRUM/`（移行ツールの出力・git管理外）は `{{< toc >}}` ショートコードを使っているが、その定義 `hugo-site/layouts/shortcodes/toc.html` は**未マージのブランチ `feature/toc-macro-support` にしか存在しない**。本ブランチは `main` から派生しているため定義が無く、そのままビルドすると「shortcode 'toc' not found」でエラーになる。これは本タスクの実装とは無関係な既存事情である。
+
+そこで検証は `--contentDir` でコンテンツディレクトリを差し替えて行う。テーマ・設定・レイアウトは本物のまま、コンテンツだけをフィクスチャに差し替える方式で、リポジトリ内のファイルは一切移動・削除しない。この方式が機能することは検証済み。
+
 - [ ] **Step 2: ビルドして構造を検証**
 
+フィクスチャを検証用のコンテンツディレクトリにコピーしてビルドする（`<SCRATCH>` はこのセッションのスクラッチディレクトリに置き換える）:
+
 ```bash
-cd hugo-site && hugo --quiet --destination /tmp/hugo-check
+VC=<SCRATCH>/verify-content
+rm -rf "$VC" && mkdir -p "$VC"
+cp -R hugo-site/content/sample "$VC"/
+hugo --source hugo-site --contentDir "$VC" --destination /tmp/hugo-check --quiet
 ```
 
-Expected: エラーなし。フォルダのHTMLは生成されない:
+Expected: エラーなし（出力なし）。フォルダのHTMLは生成されない:
 
 ```bash
 ls /tmp/hugo-check/sample/
@@ -1503,7 +1514,7 @@ Expected: `0`（ツリー検証ホームはどのフォルダの子孫でもな�
 - [ ] **Step 4: 目視確認**
 
 ```bash
-make hugo-serve
+hugo server --source hugo-site --contentDir "$VC" --bind 0.0.0.0
 ```
 
 ブラウザで `http://localhost:1313/sample/tree-deep/` を開き、以下を確認する:
