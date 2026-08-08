@@ -361,7 +361,7 @@ func TestGetFolder(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"id":"555","title":"設計ドキュメント","status":"current","parentId":"111","parentType":"folder","position":3}`))
+				_, _ = w.Write([]byte(`{"id":"555","title":"設計ドキュメント","status":"current","parentId":"111","parentType":"folder","position":3}`))
 			},
 			wantTitle:    "設計ドキュメント",
 			wantParentID: "111",
@@ -372,7 +372,7 @@ func TestGetFolder(t *testing.T) {
 			folderID: "556",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"id":"556","title":"未整理","status":"current","position":null}`))
+				_, _ = w.Write([]byte(`{"id":"556","title":"未整理","status":"current","position":null}`))
 			},
 			wantTitle:    "未整理",
 			wantParentID: "",
@@ -426,7 +426,7 @@ func TestGetFolder(t *testing.T) {
 func TestPageParentTypeAndPosition(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"id":"12345","title":"テストページ","spaceId":"67890","parentId":"555","parentType":"folder","position":7}`))
+		_, _ = w.Write([]byte(`{"id":"12345","title":"テストページ","spaceId":"67890","parentId":"555","parentType":"folder","position":7}`))
 	}))
 	defer server.Close()
 
