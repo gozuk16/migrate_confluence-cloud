@@ -340,3 +340,108 @@ func TestExtractCursor(t *testing.T) {
 		})
 	}
 }
+
+// TestGetFolder はGetFolderのテスト
+func TestGetFolder(t *testing.T) {
+	tests := []struct {
+		name         string
+		folderID     string
+		handler      http.HandlerFunc
+		wantErr      bool
+		wantTitle    string
+		wantParentID string
+		wantPosition *int
+	}{
+		{
+			name:     "正常系: フォルダ取得成功",
+			folderID: "555",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/wiki/api/v2/folders/555" {
+					http.NotFound(w, r)
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"id":"555","title":"設計ドキュメント","status":"current","parentId":"111","parentType":"folder","position":3}`))
+			},
+			wantTitle:    "設計ドキュメント",
+			wantParentID: "111",
+			wantPosition: intPtr(3),
+		},
+		{
+			name:     "正常系: positionがnullの場合はnil",
+			folderID: "556",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.Write([]byte(`{"id":"556","title":"未整理","status":"current","position":null}`))
+			},
+			wantTitle:    "未整理",
+			wantParentID: "",
+			wantPosition: nil,
+		},
+		{
+			name:     "異常系: 404",
+			folderID: "999",
+			handler: func(w http.ResponseWriter, r *http.Request) {
+				http.NotFound(w, r)
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(tt.handler)
+			defer server.Close()
+
+			cc := newTestConfluenceClient(server.URL)
+			folder, err := cc.GetFolder(tt.folderID)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("エラーを期待しましたが nil でした")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("予期しないエラー: %v", err)
+			}
+			if folder.Title != tt.wantTitle {
+				t.Errorf("Title = %q, want %q", folder.Title, tt.wantTitle)
+			}
+			if folder.ParentID != tt.wantParentID {
+				t.Errorf("ParentID = %q, want %q", folder.ParentID, tt.wantParentID)
+			}
+			if tt.wantPosition == nil {
+				if folder.Position != nil {
+					t.Errorf("Position = %v, want nil", *folder.Position)
+				}
+			} else if folder.Position == nil || *folder.Position != *tt.wantPosition {
+				t.Errorf("Position = %v, want %d", folder.Position, *tt.wantPosition)
+			}
+		})
+	}
+}
+
+// TestPageParentTypeAndPosition はページJSONのparentType/positionが読めることを確認する
+func TestPageParentTypeAndPosition(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"12345","title":"テストページ","spaceId":"67890","parentId":"555","parentType":"folder","position":7}`))
+	}))
+	defer server.Close()
+
+	cc := newTestConfluenceClient(server.URL)
+	page, err := cc.GetPage("12345")
+	if err != nil {
+		t.Fatalf("予期しないエラー: %v", err)
+	}
+	if page.ParentType != "folder" {
+		t.Errorf("ParentType = %q, want %q", page.ParentType, "folder")
+	}
+	if page.Position == nil || *page.Position != 7 {
+		t.Errorf("Position = %v, want 7", page.Position)
+	}
+}
+
+// intPtr はテスト用に int のポインタを返す
+func intPtr(v int) *int { return &v }
