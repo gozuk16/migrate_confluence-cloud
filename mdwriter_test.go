@@ -326,3 +326,96 @@ func TestMDWriter_WritePage_WithCommentReplies(t *testing.T) {
 		t.Errorf("返信コメント div のクローズタグが含まれていません\n内容: %q", contentStr)
 	}
 }
+
+func TestFrontMatterWeight(t *testing.T) {
+	tests := []struct {
+		name     string
+		position *int
+		want     int
+	}{
+		{name: "position=0 は weight=1", position: intPtr(0), want: 1},
+		{name: "position=5 は weight=6", position: intPtr(5), want: 6},
+		{name: "position=nil は weight=9999", position: nil, want: 9999},
+		{name: "負のpositionでも1以上", position: intPtr(-3), want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := frontMatterWeight(tt.position); got != tt.want {
+				t.Errorf("frontMatterWeight() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMDWriter_FrontMatterHierarchy(t *testing.T) {
+	t.Run("parent_idとweightが出力される", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		page := &Page{
+			ID:         "12345",
+			Title:      "子ページ",
+			SpaceID:    "67890",
+			ParentID:   "555",
+			ParentType: "folder",
+			Position:   intPtr(2),
+			Body: PageBody{
+				AtlasDocFormat: AtlasDocFormat{
+					Value: `{"version":1,"type":"doc","content":[]}`,
+				},
+			},
+		}
+
+		if err := writer.WritePage(page, "TEST", "テストスペース", "親フォルダ", nil, nil, nil); err != nil {
+			t.Fatalf("WritePage エラー: %v", err)
+		}
+
+		mdPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "index.md")
+		data, err := os.ReadFile(mdPath)
+		if err != nil {
+			t.Fatalf("読み込みエラー: %v", err)
+		}
+		content := string(data)
+
+		for _, want := range []string{
+			`parent_id = "555"`,
+			`weight = 3`,
+			`parent = "親フォルダ"`, // 既存キーは互換のため残す
+		} {
+			if !strings.Contains(content, want) {
+				t.Errorf("フロントマターに %q が含まれていません:\n%s", want, content)
+			}
+		}
+	})
+
+	t.Run("親がない場合はparent_idを出力しない", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		writer := newTestMDWriter(tmpDir)
+
+		page := &Page{
+			ID:      "1",
+			Title:   "ルートページ",
+			SpaceID: "67890",
+			Body: PageBody{
+				AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`},
+			},
+		}
+
+		if err := writer.WritePage(page, "TEST", "テストスペース", "", nil, nil, nil); err != nil {
+			t.Fatalf("WritePage エラー: %v", err)
+		}
+
+		mdPath := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "index.md")
+		data, err := os.ReadFile(mdPath)
+		if err != nil {
+			t.Fatalf("読み込みエラー: %v", err)
+		}
+		if strings.Contains(string(data), "parent_id") {
+			t.Errorf("parent_id が出力されています:\n%s", string(data))
+		}
+		if !strings.Contains(string(data), "weight = 9999") {
+			t.Errorf("position未設定時の weight = 9999 が出力されていません:\n%s", string(data))
+		}
+	})
+}

@@ -173,6 +173,12 @@ func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentT
 		sb.WriteString(fmt.Sprintf("parent = %q\n", parentTitle))
 	}
 
+	// 階層構造用: 親のID（ページ・フォルダ共通）とサイドバーの並び順
+	if page.ParentID != "" {
+		sb.WriteString(fmt.Sprintf("parent_id = %q\n", page.ParentID))
+	}
+	sb.WriteString(fmt.Sprintf("weight = %d\n", frontMatterWeight(page.Position)))
+
 	// ラベル
 	if len(labels) > 0 {
 		labelNames := make([]string, 0, len(labels))
@@ -234,4 +240,18 @@ func buildAttachmentMap(attachments []Attachment) map[string]string {
 		m[a.ID] = a.Title
 	}
 	return m
+}
+
+// frontMatterWeight は Confluence の position を Hugo の weight に変換する。
+// Hugo の weight 昇順ソートでは 0 が先頭に来てしまうため必ず 1 以上にし、
+// position が取得できない場合は 9999 として末尾に寄せる。
+func frontMatterWeight(position *int) int {
+	if position == nil {
+		return 9999
+	}
+	weight := *position + 1
+	if weight < 1 {
+		weight = 1
+	}
+	return weight
 }
