@@ -244,7 +244,7 @@ Expected: PASS（3サブテスト＋1テスト）
 - [ ] **Step 5: 全テストとlintを実行**
 
 Run: `make test && make lint`
-Expected: 既存テストも含めて全てPASS
+Expected: 既存テストも含めて全てPASS。`make lint` はこのリポジトリでは**元から23件の指摘で失敗する**（errcheck 16 + staticcheck 7、本ブランチ以前からの既存債務）ため、「PASSすること」ではなく**自分の変更で指摘件数を増やしていないこと**を確認する。件数は `golangci-lint run ./... 2>/dev/null | grep -cE '\.go:'` で数える。増えていたら自分の変更分を修正する。
 
 - [ ] **Step 6: コミット**
 
@@ -883,7 +883,7 @@ Expected: PASS（4サブテスト）
 - [ ] **Step 5: 全テストとlintを実行**
 
 Run: `make test && make lint`
-Expected: 全てPASS
+Expected: テストは全てPASS。`make lint` はこのリポジトリでは**元から23件の指摘で失敗する**（errcheck 16 + staticcheck 7、本ブランチ以前からの既存債務）ため、「PASSすること」ではなく**自分の変更で指摘件数を増やしていないこと**を確認する。件数は `golangci-lint run ./... 2>/dev/null | grep -cE '\.go:'` で数える。増えていたら自分の変更分を修正する。
 
 - [ ] **Step 6: コミット**
 
@@ -1065,7 +1065,7 @@ Expected: PASS
 - [ ] **Step 5: 全テストとlintを実行**
 
 Run: `make test && make lint`
-Expected: 全てPASS
+Expected: テストは全てPASS。`make lint` はこのリポジトリでは**元から23件の指摘で失敗する**（errcheck 16 + staticcheck 7、本ブランチ以前からの既存債務）ため、「PASSすること」ではなく**自分の変更で指摘件数を増やしていないこと**を確認する。件数は `golangci-lint run ./... 2>/dev/null | grep -cE '\.go:'` で数える。増えていたら自分の変更分を修正する。
 
 - [ ] **Step 6: コミット**
 
@@ -1118,7 +1118,7 @@ Expected: エラーなし
 - [ ] **Step 3: 全テストとlintを実行**
 
 Run: `make test && make lint`
-Expected: 全てPASS
+Expected: テストは全てPASS。`make lint` はこのリポジトリでは**元から23件の指摘で失敗する**（errcheck 16 + staticcheck 7、本ブランチ以前からの既存債務）ため、「PASSすること」ではなく**自分の変更で指摘件数を増やしていないこと**を確認する。件数は `golangci-lint run ./... 2>/dev/null | grep -cE '\.go:'` で数える。増えていたら自分の変更分を修正する。
 
 - [ ] **Step 4: コミット**
 
@@ -1588,7 +1588,7 @@ make test && make lint && make build
 cd hugo-site && hugo --quiet --destination /tmp/hugo-check-final
 ```
 
-Expected: すべてエラーなし
+Expected: `make test` と `make build` と hugo ビルドはエラーなし。`make lint` は既存債務23件で失敗するため、`golangci-lint run ./... 2>/dev/null | grep -cE '\.go:'` が **23以下**であること（本ブランチで増やしていないこと）を確認する。
 
 - [ ] **Step 5: コミットしてPRを作成**
 
