@@ -1091,7 +1091,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: fetchSpace にフォルダ収集を追加**
 
-`main.go` の `fetchSpace` 内、各ページ処理ループ（`for i, page := range pages {`）の**直前**に追加:
+`main.go` の `fetchSpace` 内、各ページ処理ループ（`for i, page := range pages {`）の**直後**（`fmt.Printf("完了: %d ページを変換しました\n", len(pages))` の前）に追加:
+
+**順序が重要**: フォルダはページを**すべて書き終えた後**に書くこと。`WriteFolder` は「同名ディレクトリにフォルダ以外のindex.mdが既にある場合は `<タイトル>_<フォルダID>` にフォールバックする」保護を持つが、`WritePage` には逆方向の保護が無い。先にフォルダを書くと、同名ページがフォルダスタブを上書きしてしまう。
 
 ```go
 	// フォルダの収集と出力（ページの親を辿って必要なフォルダだけ取得する）
