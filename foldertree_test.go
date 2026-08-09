@@ -114,4 +114,62 @@ func TestCollectFolders(t *testing.T) {
 			t.Errorf("GetFolderが呼ばれました: %v", getter.calls)
 		}
 	})
+
+	t.Run("ParentTypeが空でParentIDがページID集合に含まれない場合はフォルダとして収集する", func(t *testing.T) {
+		// Confluence REST API v2 のページ一覧が parentType を返さないケースを想定。
+		// 親IDがこのスペースのページ集合に無いため、フォルダとして解決を試みる。
+		getter := &fakeFolderGetter{folders: map[string]*Folder{
+			"10": {ID: "10", Title: "設計", ParentType: "page", ParentID: "1"},
+		}}
+		pages := []Page{
+			{ID: "1", Title: "Home"},
+			{ID: "2", Title: "子", ParentID: "10", ParentType: ""},
+		}
+
+		folders := CollectFolders(getter, pages)
+
+		if len(folders) != 1 {
+			t.Fatalf("フォルダ数 = %d, want 1", len(folders))
+		}
+		if folders[0].ID != "10" || folders[0].Title != "設計" {
+			t.Errorf("folders[0] = %+v, want ID=10 Title=設計", folders[0])
+		}
+	})
+
+	t.Run("ParentTypeが空でParentIDがページID集合に含まれる場合はフォルダとして収集しない", func(t *testing.T) {
+		// 親IDが同じスペースのページ集合に含まれる場合は、親がページだと判定できるため
+		// フォルダ解決を試みない。
+		getter := &fakeFolderGetter{folders: map[string]*Folder{}}
+		pages := []Page{
+			{ID: "1", Title: "Home"},
+			{ID: "2", Title: "子", ParentID: "1", ParentType: ""},
+		}
+
+		folders := CollectFolders(getter, pages)
+
+		if len(folders) != 0 {
+			t.Fatalf("フォルダ数 = %d, want 0", len(folders))
+		}
+		if len(getter.calls) != 0 {
+			t.Errorf("GetFolderが呼ばれました: %v", getter.calls)
+		}
+	})
+
+	t.Run("ParentTypeがpageの場合は従来どおり収集しない", func(t *testing.T) {
+		// ParentIDがページID集合に含まれない場合でも、ParentTypeが明示的に
+		// "page" ならフォルダ解決を試みてはならない。
+		getter := &fakeFolderGetter{folders: map[string]*Folder{}}
+		pages := []Page{
+			{ID: "2", Title: "子", ParentID: "999", ParentType: "page"},
+		}
+
+		folders := CollectFolders(getter, pages)
+
+		if len(folders) != 0 {
+			t.Fatalf("フォルダ数 = %d, want 0", len(folders))
+		}
+		if len(getter.calls) != 0 {
+			t.Errorf("GetFolderが呼ばれました: %v", getter.calls)
+		}
+	})
 }
