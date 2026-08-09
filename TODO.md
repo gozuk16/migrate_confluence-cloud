@@ -46,3 +46,12 @@
   - [x] B: リスト入れ子インデントのマーカー幅ベース化と隣接強調runの結合
   - [x] C: 文字色（textColor→span）・配置（alignment→div）のHTML再現
   - [x] D: コメント投稿者名の解決（GetUserDisplayNameのワイヤリング）
+- [x] 左サイドバーの階層ツリー化（フォルダ対応）
+  - Confluence REST API v2 の `GET /wiki/api/v2/folders/{id}` を叩く `GetFolder` を追加
+  - ページの親を辿って必要なフォルダだけを再帰的に収集する `CollectFolders` を追加（foldertree.go）
+  - ページのフロントマターに `parent_id` と `weight`（並び順）を追加
+  - フォルダは `is_folder = true` / `[build] render = "never"` の「レンダリングされないページ」スタブとして出力（URL・HTMLは生成されないがサイドバーのツリーには現れる）
+  - 中間ファイルのメタデータに `parent_type` / `position` を追加し、convert コマンド（オフライン再変換）でも階層を維持
+  - 中間ファイルから読み戻す際に親ID（ParentID）が復元されていなかった不具合を修正
+  - テーマ側（hugo-theme-docs submodule）で `<details>`/`<summary>` による開閉式階層ツリー表示を実装（JavaScript不要、現在ページの祖先フォルダは自動展開・ハイライト）
+  - 利用者向け注意: 既存の出力には階層情報が含まれないため反映には移行の再実行が必要。空フォルダ（ページを含まない）はサイドバーに表示されない。親が取得できないページはルート直下に表示され移行ログに警告が出る。`weight` を持たないページ（手書き追加ページ等）は Hugo の仕様上サイドバー先頭に並ぶ
