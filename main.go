@@ -320,6 +320,17 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	// フォルダの収集と出力（ページの親を辿って必要なフォルダだけ取得する）
+	folders := CollectFolders(client, pages)
+	if len(folders) > 0 {
+		fmt.Printf("フォルダ: %d 件\n", len(folders))
+		for _, folder := range folders {
+			if err := writer.WriteFolder(&folder, space.Key, space.Name); err != nil {
+				slog.Warn("フォルダ出力エラー", "folderID", folder.ID, "title", folder.Title, "error", err)
+			}
+		}
+	}
+
 	fmt.Printf("完了: %d ページを変換しました\n", len(pages))
 
 	// 未対応要素レポートの出力

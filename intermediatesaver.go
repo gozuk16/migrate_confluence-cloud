@@ -18,6 +18,8 @@ type PageMetadata struct {
 	SpaceKey    string   `toml:"space_key"`
 	ParentID    string   `toml:"parent_id"`
 	ParentTitle string   `toml:"parent_title"`
+	ParentType  string   `toml:"parent_type"`
+	Position    *int     `toml:"position"`
 	CreatedAt   string   `toml:"created_at"`
 	UpdatedAt   string   `toml:"updated_at"`
 	AuthorID    string   `toml:"author_id"`
@@ -69,18 +71,20 @@ func (s *IntermediateSaver) SavePage(page *Page, spaceKey string, labels []Label
 
 	// メタデータの保存
 	meta := PageMetadata{
-		ID:        page.ID,
-		Title:     page.Title,
-		Status:    page.Status,
-		SpaceID:   page.SpaceID,
-		SpaceKey:  spaceKey,
-		ParentID:  page.ParentID,
-		CreatedAt: page.Version.CreatedAt,
-		UpdatedAt: page.Version.CreatedAt,
-		AuthorID:  page.Version.AuthorID,
-		Version:   page.Version.Number,
-		Labels:    labelNames,
-		WebURL:    page.Links.WebUI,
+		ID:         page.ID,
+		Title:      page.Title,
+		Status:     page.Status,
+		SpaceID:    page.SpaceID,
+		SpaceKey:   spaceKey,
+		ParentID:   page.ParentID,
+		ParentType: page.ParentType,
+		Position:   page.Position,
+		CreatedAt:  page.Version.CreatedAt,
+		UpdatedAt:  page.Version.CreatedAt,
+		AuthorID:   page.Version.AuthorID,
+		Version:    page.Version.Number,
+		Labels:     labelNames,
+		WebURL:     page.Links.WebUI,
 	}
 
 	metaPath := filepath.Join(dir, "metadata.toml")
@@ -151,10 +155,13 @@ func (s *IntermediateSaver) LoadPage(spaceKey, pageTitle string) (*Page, []Label
 	}
 
 	page := &Page{
-		ID:      meta.ID,
-		Title:   meta.Title,
-		Status:  meta.Status,
-		SpaceID: meta.SpaceID,
+		ID:         meta.ID,
+		Title:      meta.Title,
+		Status:     meta.Status,
+		SpaceID:    meta.SpaceID,
+		ParentID:   meta.ParentID,
+		ParentType: meta.ParentType,
+		Position:   meta.Position,
 		Body: PageBody{
 			AtlasDocFormat: AtlasDocFormat{
 				Value:          string(jsonData),

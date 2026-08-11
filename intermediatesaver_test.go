@@ -184,3 +184,67 @@ func TestIntermediateSaver_ListPages(t *testing.T) {
 		t.Errorf("ページ数が期待と異なります\n期待: 2\n実際: %d", len(titles))
 	}
 }
+
+func TestIntermediateSaver_HierarchyRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	saver := NewIntermediateSaver(tmpDir)
+
+	page := &Page{
+		ID:         "12345",
+		Title:      "階層テストページ",
+		Status:     "current",
+		SpaceID:    "67890",
+		ParentID:   "555",
+		ParentType: "folder",
+		Position:   intPtr(4),
+		Body: PageBody{
+			AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`},
+		},
+		Version: Version{Number: 1, CreatedAt: "2024-01-01T00:00:00.000Z"},
+	}
+
+	if err := saver.SavePage(page, "TEST", nil); err != nil {
+		t.Fatalf("SavePage エラー: %v", err)
+	}
+
+	loaded, _, err := saver.LoadPage("TEST", page.Title)
+	if err != nil {
+		t.Fatalf("LoadPage エラー: %v", err)
+	}
+
+	if loaded.ParentID != "555" {
+		t.Errorf("ParentID = %q, want %q", loaded.ParentID, "555")
+	}
+	if loaded.ParentType != "folder" {
+		t.Errorf("ParentType = %q, want %q", loaded.ParentType, "folder")
+	}
+	if loaded.Position == nil || *loaded.Position != 4 {
+		t.Errorf("Position = %v, want 4", loaded.Position)
+	}
+}
+
+func TestIntermediateSaver_PositionNilRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	saver := NewIntermediateSaver(tmpDir)
+
+	page := &Page{
+		ID:      "1",
+		Title:   "position無しページ",
+		SpaceID: "67890",
+		Body: PageBody{
+			AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`},
+		},
+	}
+
+	if err := saver.SavePage(page, "TEST", nil); err != nil {
+		t.Fatalf("SavePage エラー: %v", err)
+	}
+
+	loaded, _, err := saver.LoadPage("TEST", page.Title)
+	if err != nil {
+		t.Fatalf("LoadPage エラー: %v", err)
+	}
+	if loaded.Position != nil {
+		t.Errorf("Position = %v, want nil", *loaded.Position)
+	}
+}

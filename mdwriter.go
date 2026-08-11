@@ -48,6 +48,120 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	return nil
 }
 
+// WriteFolder はConfluenceのフォルダを「レンダリングされないページ」スタブとして書き出す。
+// Hugoの build.render = "never" によりURLもHTMLも生成されないが、
+// list = "always" によりテンプレートのページ一覧には現れるため、サイドバーのツリーに使える。
+func (w *MDWriter) WriteFolder(folder *Folder, spaceKey, spaceTitle string) error {
+	folderDir, err := w.folderDir(folder, spaceKey)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(folderDir, 0755); err != nil {
+		return fmt.Errorf("フォルダディレクトリの作成に失敗しました: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("+++\n")
+	sb.WriteString(fmt.Sprintf("title = %q\n", folder.Title))
+	sb.WriteString(fmt.Sprintf("space = %q\n", spaceKey))
+	if spaceTitle != "" {
+		sb.WriteString(fmt.Sprintf("space_title = %q\n", spaceTitle))
+	}
+	sb.WriteString(fmt.Sprintf("page_id = %q\n", folder.ID))
+	if folder.ParentID != "" {
+		sb.WriteString(fmt.Sprintf("parent_id = %q\n", folder.ParentID))
+	}
+	sb.WriteString(fmt.Sprintf("weight = %d\n", frontMatterWeight(folder.Position)))
+	sb.WriteString("is_folder = true\n")
+	sb.WriteString("[build]\n")
+	sb.WriteString("  render = \"never\"\n")
+	sb.WriteString("  list = \"always\"\n")
+	sb.WriteString("+++\n")
+
+	mdPath := filepath.Join(folderDir, "index.md")
+	if err := os.WriteFile(mdPath, []byte(sb.String()), 0644); err != nil {
+		return fmt.Errorf("フォルダスタブ書き出しエラー: %w", err)
+	}
+
+	return nil
+}
+
+// folderDir はフォルダスタブの出力先ディレクトリを返す。
+// 同名ディレクトリに既にページやフォルダが存在する場合、
+// 安全性を最優先に以下の順で判定する:
+// 1. ファイルが存在しない → プライマリディレクトリを使用
+// 2. ファイルが自分自身のスタブ（同じ page_id で is_folder=true） → プライマリディレクトリを再利用（冪等性）
+// 3. ファイルが別コンテンツ → フォールバック "<タイトル>_<フォルダID>" を試す
+// 4. フォールバックも使えない → エラー（データ破損を避けるため黙って上書きしない）
+func (w *MDWriter) folderDir(folder *Folder, spaceKey string) (string, error) {
+	safeTitle := sanitizeFilename(folder.Title)
+	dir := filepath.Join(w.outputDir, spaceKey, safeTitle)
+
+	data, err := os.ReadFile(filepath.Join(dir, "index.md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return dir, nil // 未使用のディレクトリ名なのでそのまま使う
+		}
+		return "", fmt.Errorf("既存ファイルの確認に失敗しました (%s): %w", dir, err)
+	}
+
+	// 自分自身のスタブなら同じディレクトリを再利用する（再実行時の冪等性）
+	if isSelfFolderStub(data, folder.ID) {
+		return dir, nil
+	}
+
+	// プライマリは使えない。フォールバック先を試す
+	fallbackDir := filepath.Join(w.outputDir, spaceKey, fmt.Sprintf("%s_%s", safeTitle, folder.ID))
+	fallbackData, err := os.ReadFile(filepath.Join(fallbackDir, "index.md"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fallbackDir, nil // フォールバックが未使用なので使用可
+		}
+		return "", fmt.Errorf("フォールバックディレクトリの確認に失敗しました (%s): %w", fallbackDir, err)
+	}
+
+	// フォールバック先も存在する。自分自身のスタブか確認
+	if isSelfFolderStub(fallbackData, folder.ID) {
+		return fallbackDir, nil
+	}
+
+	// プライマリもフォールバックも他人のコンテンツを持っている
+	return "", fmt.Errorf("フォルダ %q を出力できるディレクトリがありません: プライマリ %q と フォールバック %q の両方にコンテンツが存在しています", folder.Title, dir, fallbackDir)
+}
+
+// isSelfFolderStub は、与えられたファイルデータが「このフォルダ自身のスタブ」かどうかを判定する。
+// フロントマター内に page_id が一致し、かつ is_folder = true がある場合のみ true を返す。
+// これにより、他の無関係なページの本文中に偶然 page_id という文字列が含まれていても
+// 誤認を防ぐことができる。
+func isSelfFolderStub(data []byte, folderID string) bool {
+	frontMatter := extractFrontMatter(data)
+	if frontMatter == "" {
+		return false // フロントマターがない、または壊れている
+	}
+
+	// フロントマター内に page_id と is_folder = true の両方が含まれるか確認
+	pageIDMatch := fmt.Sprintf("page_id = %q", folderID)
+	return strings.Contains(frontMatter, pageIDMatch) && strings.Contains(frontMatter, "is_folder = true")
+}
+
+// extractFrontMatter はMarkdownファイルのフロントマター（最初の +++ から次の +++ まで）を抽出する。
+// フロントマターが無い場合や壊れている場合は空文字列を返す。
+func extractFrontMatter(data []byte) string {
+	s := string(data)
+	if !strings.HasPrefix(s, "+++\n") {
+		return "" // フロントマターが存在しない
+	}
+
+	// 最初の "+++" をスキップして、次の "+++" を探す
+	rest := s[4:] // "+++\n" の4文字をスキップ
+	idx := strings.Index(rest, "\n+++")
+	if idx == -1 {
+		return "" // 閉じの "+++" が見つからない（壊れたファイル）
+	}
+
+	return rest[:idx] // フロントマター内容（最後の改行含む）
+}
+
 // generateContent はMarkdownコンテンツ全体を生成する
 func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label, comments []Comment, attachments []Attachment) (string, error) {
 	var sb strings.Builder
@@ -173,6 +287,12 @@ func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentT
 		sb.WriteString(fmt.Sprintf("parent = %q\n", parentTitle))
 	}
 
+	// 階層構造用: 親のID（ページ・フォルダ共通）とサイドバーの並び順
+	if page.ParentID != "" {
+		sb.WriteString(fmt.Sprintf("parent_id = %q\n", page.ParentID))
+	}
+	sb.WriteString(fmt.Sprintf("weight = %d\n", frontMatterWeight(page.Position)))
+
 	// ラベル
 	if len(labels) > 0 {
 		labelNames := make([]string, 0, len(labels))
@@ -234,4 +354,18 @@ func buildAttachmentMap(attachments []Attachment) map[string]string {
 		m[a.ID] = a.Title
 	}
 	return m
+}
+
+// frontMatterWeight は Confluence の position を Hugo の weight に変換する。
+// Hugo の weight 昇順ソートでは 0 が先頭に来てしまうため必ず 1 以上にし、
+// position が取得できない場合は 9999 として末尾に寄せる。
+func frontMatterWeight(position *int) int {
+	if position == nil {
+		return 9999
+	}
+	weight := *position + 1
+	if weight < 1 {
+		weight = 1
+	}
+	return weight
 }

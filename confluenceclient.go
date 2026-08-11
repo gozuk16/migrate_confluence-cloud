@@ -34,14 +34,16 @@ type UserCache struct {
 
 // Page はConfluenceページ情報
 type Page struct {
-	ID       string   `json:"id"`
-	Title    string   `json:"title"`
-	Status   string   `json:"status"`
-	SpaceID  string   `json:"spaceId"`
-	ParentID string   `json:"parentId"`
-	Body     PageBody `json:"body"`
-	Version  Version  `json:"version"`
-	Links    Links    `json:"_links"`
+	ID         string   `json:"id"`
+	Title      string   `json:"title"`
+	Status     string   `json:"status"`
+	SpaceID    string   `json:"spaceId"`
+	ParentID   string   `json:"parentId"`
+	ParentType string   `json:"parentType"` // "page" または "folder"
+	Position   *int     `json:"position"`   // 同一階層内の並び順。null と 0 を区別するためポインタ
+	Body       PageBody `json:"body"`
+	Version    Version  `json:"version"`
+	Links      Links    `json:"_links"`
 }
 
 // PageBody はページのボディコンテンツ
@@ -579,4 +581,31 @@ func extractCursor(nextURL string) string {
 		return ""
 	}
 	return parsed.Query().Get("cursor")
+}
+
+// Folder はConfluenceのフォルダ情報（v2 API の folder コンテンツタイプ）
+type Folder struct {
+	ID         string `json:"id"`
+	Title      string `json:"title"`
+	Status     string `json:"status"`
+	ParentID   string `json:"parentId"`
+	ParentType string `json:"parentType"` // "page" または "folder"
+	Position   *int   `json:"position"`
+}
+
+// GetFolder はフォルダ情報を取得する
+func (cc *ConfluenceClient) GetFolder(folderID string) (*Folder, error) {
+	apiURL := fmt.Sprintf("%s/wiki/api/v2/folders/%s", cc.baseURL, folderID)
+
+	body, err := cc.doRequest("GET", apiURL)
+	if err != nil {
+		return nil, fmt.Errorf("フォルダ取得エラー (ID: %s): %w", folderID, err)
+	}
+
+	var folder Folder
+	if err := json.Unmarshal(body, &folder); err != nil {
+		return nil, fmt.Errorf("フォルダJSONパースエラー (ID: %s): %w", folderID, err)
+	}
+
+	return &folder, nil
 }
