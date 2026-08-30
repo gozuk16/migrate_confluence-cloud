@@ -49,3 +49,6 @@ docs/build/
 hugo-site/public/
 hugo-site/resources/
 hugo-site/.hugo_build.lock
+
+# Playwright MCP の出力先
+.playwright-mcp/
