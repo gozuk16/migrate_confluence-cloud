@@ -2,9 +2,14 @@
 
 ## 進行中
 
-- [ ] Confluenceの「レイアウト」（layoutSection/layoutColumn）の再現
-  - [x] 現状調査: ADF変換では `layoutSection`/`layoutColumn` の子要素を単純連結しており、カラム幅・横並びの情報が失われている（実データで確認: 3カラム均等幅 `width: 33.33` × 3 のlayoutSectionが単なる縦並びテキストになっていた）
-  - [ ] 再現方式の設計（HTML divによるflex埋め込み案など）をユーザーに提示・承認後に実装
+- [ ] ページプロパティレポート（detailssummary）の再現
+  - [x] 現状調査: `SCRUM/2026-8-8` の detailssummary が `<!-- macro: detailssummary -->` になり何も表示されない。子ページ メモ / メモ2 に details マクロとラベル memo がある
+  - [x] 設計（CQLはGoで解析しショートコード引数に変換、集計はHugo側）: `docs/superpowers/specs/2026-10-03-page-properties-report-design.md`
+  - [ ] 仕様書のユーザー確認
+  - [ ] 実装計画の作成
+  - [ ] 実装（Go: details抽出・CQL解析・ショートコード出力 / テーマ: page-properties-report ショートコード、toc のテーマ移動）
+  - [ ] 実データ・一時サイトでの動作確認
+  - [ ] PR作成（テーマ・親リポジトリ。親側で submodule ポインタも更新）
 
 ## 未着手
 
