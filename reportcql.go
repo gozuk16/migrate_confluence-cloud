@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -135,6 +136,10 @@ func parseReportCQL(cql string) (reportFilter, []string) {
 		}
 		f.Labels, f.LabelsMode = labels, "any"
 		warns = append(warns, "label の and と or の混在は未対応のため「いずれかのラベル」として扱います: "+strings.Join(labels, ", "))
+	}
+	// すべての条件が除外されて何も残らなかった場合は、解析できない CQL と同じく同じスペースを対象にする
+	if reflect.DeepEqual(f, reportFilter{}) {
+		f.Space = "current"
 	}
 	return f, warns
 }
@@ -398,6 +403,10 @@ func (p *cqlParser) parseClause() (cqlClause, error) {
 		if end, ok := p.next(); !ok || end.kind != ")" {
 			return cqlClause{}, fmt.Errorf("閉じ括弧がありません")
 		}
+		// 句が1つだけの括弧は、その句そのものとして扱う
+		if len(inner) == 1 {
+			return inner[0], nil
+		}
 		okGroup := allPositiveLabel(inner)
 		for _, c := range conns {
 			if c != "or" {
@@ -520,6 +529,19 @@ func macroParams(node ADFNode) map[string]string {
 	return out
 }
 
+// quoteShortcodeParam は値を Hugo ショートコードの引数として引用符で囲む。
+// Hugo の二重引用符文字列には `\\` のエスケープがないため、末尾の `\` は引用符を打ち消してしまう。
+// 改行は空白にし、`\` を含み ` を含まない値は生文字列（バッククォート）で出す。
+// それ以外は末尾の `\` を取り除いて二重引用符で囲む（`"` は `\"` にする）
+func quoteShortcodeParam(v string) string {
+	v = strings.NewReplacer("\r\n", " ", "\n", " ", "\r", " ").Replace(v)
+	if strings.Contains(v, `\`) && !strings.Contains(v, "`") {
+		return "`" + v + "`"
+	}
+	v = strings.TrimRight(v, `\`)
+	return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"`
+}
+
 // buildPropertiesReportShortcode は絞り込み条件と表示オプションから page-properties-report ショートコードを組み立てる。
 // 値が空の引数は出力しない
 func buildPropertiesReportShortcode(f reportFilter, opts map[string]string) string {
@@ -552,7 +574,7 @@ func buildPropertiesReportShortcode(f reportFilter, opts map[string]string) stri
 		if a[1] == "" {
 			continue
 		}
-		sb.WriteString(" " + a[0] + `="` + strings.ReplaceAll(a[1], `"`, `\"`) + `"`)
+		sb.WriteString(" " + a[0] + "=" + quoteShortcodeParam(a[1]))
 	}
 	sb.WriteString(" >}}")
 	return sb.String()

@@ -39,7 +39,10 @@ func TestParseReportCQL(t *testing.T) {
 		{"未対応の項目", `creator = currentUser() and label = "a"`, reportFilter{Labels: []string{"a"}, LabelsMode: "all"}, 1},
 		{"異なる項目のor", `label = "a" or title ~ "x" and space = currentSpace()`, reportFilter{Space: "current"}, 1},
 		{"括弧の入れ子は除外", `(title ~ "a" and label = "b") and space = "X"`, reportFilter{Space: "X"}, 1},
-		{"解釈できない日付", `created > "yesterday"`, reportFilter{}, 1},
+		{"解釈できない日付", `created > "yesterday"`, reportFilter{Space: "current"}, 1},
+		{"全条件が除外された", `creator = currentUser()`, reportFilter{Space: "current"}, 1},
+		{"単一句の括弧", `(label = "a") and label = "b"`, reportFilter{Labels: []string{"a", "b"}, LabelsMode: "all"}, 0},
+		{"単一句の括弧タイトル", `(title ~ "x")`, reportFilter{TitleContains: "x"}, 0},
 		{"構文エラー", `label = `, reportFilter{Space: "current"}, 1},
 	}
 	for _, tt := range tests {
@@ -70,6 +73,30 @@ func TestBuildPropertiesReportShortcode_Minimal(t *testing.T) {
 	want := `{{< page-properties-report space="current" >}}`
 	if got != want {
 		t.Errorf("\n got  %s\n want %s", got, want)
+	}
+}
+
+func TestBuildPropertiesReportShortcode_Escape(t *testing.T) {
+	tests := []struct {
+		name string
+		f    reportFilter
+		opts map[string]string
+		want string
+	}{
+		{"末尾バックスラッシュは生文字列", reportFilter{TitleContains: `a\`}, nil,
+			"{{< page-properties-report title_contains=`a\\` >}}"},
+		{"改行は空白に", reportFilter{}, map[string]string{"headings": "A\nB"},
+			`{{< page-properties-report headings="A B" >}}`},
+		{"バッククォートと末尾バックスラッシュ", reportFilter{TitleContains: "a`b\\"}, nil,
+			"{{< page-properties-report title_contains=\"a`b\" >}}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildPropertiesReportShortcode(tt.f, tt.opts)
+			if got != tt.want {
+				t.Errorf("\n got  %s\n want %s", got, tt.want)
+			}
+		})
 	}
 }
 

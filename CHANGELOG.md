@@ -7,6 +7,7 @@
 - ページプロパティ（detailsマクロ）の表の各行を、front matterの `[[properties]]`（`key` / `value`）に出力するようにした。本文の表はこれまでどおり表示される
 - レポートの条件（CQL）は変換時に解析し、テーマの `page-properties-report` ショートコードの引数にする。対応する条件は label（=、in、!=、not in、label どうしの or）、space、parent、ancestor、title（=、~）、created / lastmodified（絶対日付と `now("-4w")` 形式）。相対日付はHugoのビルド時刻を基準に評価する。対応していない条件は変換ログに警告を出して除外する
 - 表示オプション headings、sortBy、reverseSort、firstcolumn、pageSize に対応した
+- 既知の制限: created 条件は、front matter の date が現状は最新版の作成日時（＝最終更新日時）であるため、lastmodified と同じく最終更新日で判定される。日付の比較は UTC の日単位。プロパティ値はレポートでは markdownify で表示するため、`- ` や `1. ` で始まる値はリストとして表示されることがある
 
 ### Changed（目次ショートコードの配置）
 - `toc` ショートコードをサイト側（`hugo-site/layouts/shortcodes/`）からテーマ側（`layouts/_shortcodes/`）へ移した。表示は変わらない

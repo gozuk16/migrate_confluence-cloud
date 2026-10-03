@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// detailsTable は details マクロ（縦型の表）の ADF を組み立てる。rows は [見出しセルADF, 値セルADF] の組
+// detailsMacro は details マクロ（縦型の表）の ADF を組み立てる。rows は [見出しセルADF, 値セルADF] の組
 func detailsMacro(rows ...[2]string) string {
 	var trs []string
 	for _, r := range rows {

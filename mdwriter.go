@@ -170,6 +170,9 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 	// 本文を先に変換する（ページプロパティを front matter に書くため）
 	attachmentMap := buildAttachmentMap(attachments)
 	res, convErr := w.converter.ConvertADFPage(page.Body.AtlasDocFormat.Value, attachmentMap)
+	if convErr != nil {
+		slog.Warn("本文の変換に失敗したため元のADF JSONを出力します", "pageTitle", page.Title, "error", convErr)
+	}
 	for _, msg := range res.Warnings {
 		slog.Warn("変換時の警告", "pageTitle", page.Title, "detail", msg)
 	}

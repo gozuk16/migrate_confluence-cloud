@@ -38,7 +38,7 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 - Go 1.25 以上
 - Atlassian API トークン（[生成ページ](https://id.atlassian.com/manage-profile/security/api-tokens)）
 - `golangci-lint`（`make lint` を使用する場合）
-- `hugo`（Hugo CLI）0.120.0 以上
+- `hugo`（Hugo CLI）0.146.0 以上
 - `Node.js` 18 以上（`npx pagefind` を使用する場合）
 
 ## セットアップ
