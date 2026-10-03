@@ -5,8 +5,8 @@
 - [ ] ページプロパティレポート（detailssummary）の再現
   - [x] 現状調査: `SCRUM/2026-8-8` の detailssummary が `<!-- macro: detailssummary -->` になり何も表示されない。子ページ メモ / メモ2 に details マクロとラベル memo がある
   - [x] 設計（CQLはGoで解析しショートコード引数に変換、集計はHugo側）: `docs/superpowers/specs/2026-10-03-page-properties-report-design.md`
-  - [ ] 仕様書のユーザー確認
-  - [ ] 実装計画の作成
+  - [x] 仕様書のユーザー確認
+  - [x] 実装計画の作成: `docs/superpowers/plans/2026-10-03-page-properties-report.md`
   - [ ] 実装（Go: details抽出・CQL解析・ショートコード出力 / テーマ: page-properties-report ショートコード、toc のテーマ移動）
   - [ ] 実データ・一時サイトでの動作確認
   - [ ] PR作成（テーマ・親リポジトリ。親側で submodule ポインタも更新）
