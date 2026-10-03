@@ -504,3 +504,66 @@ func (p *cqlParser) raw(start int) string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// macroParams は拡張ノードのマクロ引数（parameters.macroParams.<名前>.value）を文字列で返す
+func macroParams(node ADFNode) map[string]string {
+	out := map[string]string{}
+	params, _ := node.Attrs["parameters"].(map[string]any)
+	mp, _ := params["macroParams"].(map[string]any)
+	for k, v := range mp {
+		if m, ok := v.(map[string]any); ok {
+			if s, ok := m["value"].(string); ok {
+				out[k] = s
+			}
+		}
+	}
+	return out
+}
+
+// buildPropertiesReportShortcode は絞り込み条件と表示オプションから page-properties-report ショートコードを組み立てる。
+// 値が空の引数は出力しない
+func buildPropertiesReportShortcode(f reportFilter, opts map[string]string) string {
+	reverse := ""
+	if strings.EqualFold(opts["reverseSort"], "true") {
+		reverse = "true"
+	}
+	args := [][2]string{
+		{"labels", strings.Join(f.Labels, ",")},
+		{"labels_mode", f.LabelsMode},
+		{"labels_exclude", strings.Join(f.LabelsExclude, ",")},
+		{"space", f.Space},
+		{"scope", f.Scope},
+		{"root", f.Root},
+		{"title_is", f.TitleIs},
+		{"title_contains", f.TitleContains},
+		{"created_from", f.CreatedFrom},
+		{"created_to", f.CreatedTo},
+		{"lastmod_from", f.LastmodFrom},
+		{"lastmod_to", f.LastmodTo},
+		{"headings", opts["headings"]},
+		{"sort_by", opts["sortBy"]},
+		{"reverse", reverse},
+		{"first_column", opts["firstcolumn"]},
+		{"page_size", opts["pageSize"]},
+	}
+	var sb strings.Builder
+	sb.WriteString("{{< page-properties-report")
+	for _, a := range args {
+		if a[1] == "" {
+			continue
+		}
+		sb.WriteString(" " + a[0] + `="` + strings.ReplaceAll(a[1], `"`, `\"`) + `"`)
+	}
+	sb.WriteString(" >}}")
+	return sb.String()
+}
+
+// renderPropertiesReport は detailssummary マクロをショートコードに変換し、CQL 解析の警告を記録する
+func (r *adfRenderer) renderPropertiesReport(node ADFNode) string {
+	opts := macroParams(node)
+	f, warns := parseReportCQL(opts["cql"])
+	for _, w := range warns {
+		r.warnings = append(r.warnings, "ページプロパティレポート: "+w)
+	}
+	return buildPropertiesReportShortcode(f, opts)
+}

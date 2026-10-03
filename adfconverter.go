@@ -914,11 +914,14 @@ func extensionKey(node ADFNode) string {
 }
 
 func (r *adfRenderer) renderExtension(node ADFNode) string {
-	key := extensionKey(node)
-	if key == "toc" {
+	switch key := extensionKey(node); key {
+	case "toc":
 		return "{{< toc >}}"
+	case "detailssummary":
+		return r.renderPropertiesReport(node)
+	default:
+		return "<!-- macro: " + key + " -->"
 	}
-	return "<!-- macro: " + key + " -->"
 }
 
 func (r *adfRenderer) renderBodiedExtension(node ADFNode) string {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -51,5 +52,51 @@ func TestParseReportCQL(t *testing.T) {
 				t.Errorf("warnings = %q, want %d 件", warns, tt.wantWarns)
 			}
 		})
+	}
+}
+
+func TestBuildPropertiesReportShortcode(t *testing.T) {
+	f := reportFilter{Labels: []string{"memo", "a"}, LabelsMode: "all", Space: "current", Scope: "children", Root: "current", TitleContains: `x"y`}
+	opts := map[string]string{"headings": "日付,ステータス", "sortBy": "日付", "reverseSort": "true", "firstcolumn": "ページ", "pageSize": "10", "showCommentsCount": "true"}
+	got := buildPropertiesReportShortcode(f, opts)
+	want := `{{< page-properties-report labels="memo,a" labels_mode="all" space="current" scope="children" root="current" title_contains="x\"y" headings="日付,ステータス" sort_by="日付" reverse="true" first_column="ページ" page_size="10" >}}`
+	if got != want {
+		t.Errorf("\n got  %s\n want %s", got, want)
+	}
+}
+
+func TestBuildPropertiesReportShortcode_Minimal(t *testing.T) {
+	got := buildPropertiesReportShortcode(reportFilter{Space: "current"}, map[string]string{"reverseSort": "false"})
+	want := `{{< page-properties-report space="current" >}}`
+	if got != want {
+		t.Errorf("\n got  %s\n want %s", got, want)
+	}
+}
+
+func TestConvertADFPage_DetailsSummary(t *testing.T) {
+	adf := adfDoc(`{"type":"extension","attrs":{"extensionType":"com.atlassian.confluence.macro.core","extensionKey":"detailssummary",` +
+		`"parameters":{"macroParams":{"cql":{"value":"label = \"memo\" and space = currentSpace ( ) and parent = currentContent ( )"}}}}}`)
+	res, err := convertADFPage(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `{{< page-properties-report labels="memo" labels_mode="all" space="current" scope="children" root="current" >}}`
+	if res.Markdown != want {
+		t.Errorf("\n got  %s\n want %s", res.Markdown, want)
+	}
+	if len(res.Warnings) != 0 {
+		t.Errorf("warnings = %q, want none", res.Warnings)
+	}
+}
+
+func TestConvertADFPage_DetailsSummaryWarnings(t *testing.T) {
+	adf := adfDoc(`{"type":"extension","attrs":{"extensionKey":"detailssummary",` +
+		`"parameters":{"macroParams":{"cql":{"value":"creator = currentUser() and label = \"a\""}}}}}`)
+	res, err := convertADFPage(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(res.Warnings) != 1 || !strings.HasPrefix(res.Warnings[0], "ページプロパティレポート: ") {
+		t.Errorf("warnings = %q, want 1件（ページプロパティレポート: で始まる）", res.Warnings)
 	}
 }
