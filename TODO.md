@@ -2,7 +2,9 @@
 
 ## 進行中
 
-（なし）
+- [ ] Confluenceの「レイアウト」（layoutSection/layoutColumn）の再現
+  - [x] 現状調査: ADF変換では `layoutSection`/`layoutColumn` の子要素を単純連結しており、カラム幅・横並びの情報が失われている（実データで確認: 3カラム均等幅 `width: 33.33` × 3 のlayoutSectionが単なる縦並びテキストになっていた）
+  - [ ] 再現方式の設計（HTML divによるflex埋め込み案など）をユーザーに提示・承認後に実装
 
 ## 未着手
 
@@ -37,6 +39,10 @@
 - [x] ADF強調マーク（strong/em/strike）の前後空白によるMarkdown崩れ修正
   - wrapDelimiter ヘルパー追加（前後空白をデリミタ外に退避）
   - NOTEパネル内などで前後空白付きテキストを太字/斜体/取り消し線にした際にリテラル `**` 表示される不具合を解消
+- [x] 目次（toc）マクロのHugoショートコード変換対応（`{{< toc >}}` + toc.htmlショートコード追加）
+  - main（PR #14マージ済み時点）へrebaseして統合。mainとの重複変更（mdwriter.goへのWriteFolder追加、コメント見出し変更）は行番号のみでコンフリクトなし
+  - 実データ（`SCRUM/2026-5-13 テスト議事録`）で `make convert` 相当の再変換とHugo表示を確認。目次にセクション見出しのみ表示されコメント見出しは除外されることを確認
+  - `hugo-site/layouts/shortcodes/toc.html` はサイト直下に配置（テーマ`hugo-site/themes/hugo-theme-docs`側ではない）。Hugoの仕様上サイト側がテーマより優先されるため動作は問題ないが、他のテーマ関連ファイルとの一貫性の観点でテーマ側への統一は将来的な改善候補として残す
 - [x] コメントリプライ取得とstatusバッジ修正（PR #9に追加）
   - フッターコメントのリプライを `/footer-comments/{id}/children` から再帰取得し階層見出しで出力
   - リプライを深さに応じて `<div style="margin-left: {N}em">` でインデント表示

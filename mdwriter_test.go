@@ -303,21 +303,29 @@ func TestMDWriter_WritePage_WithCommentReplies(t *testing.T) {
 	}
 	contentStr := string(content)
 
-	// トップレベルコメント（Depth=0）は divなし
-	if !strings.Contains(contentStr, "### コメント 1\n\n") {
-		t.Errorf("親コメントの見出しが期待と異なります\n内容: %q", contentStr)
+	// トップレベルコメント（Depth=0）は divなし、HTML タグで出力
+	if !strings.Contains(contentStr, "<h3>コメント 1</h3>") {
+		t.Errorf("親コメントの見出しが期待と異なります（HTML タグでない）\n内容: %q", contentStr)
+	}
+	// Markdown見出し ### が含まれないこと（目次から除外）
+	if strings.Contains(contentStr, "### コメント 1") {
+		t.Errorf("親コメントが Markdown 見出しで出力されています（目次から除外されません）\n内容: %q", contentStr)
 	}
 
 	// 返信コメント（Depth=1）は div でインデント
 	// <div style="margin-left: 2em">
-	// #### コメント 1-1
+	// <h4>コメント 1-1</h4>
 	// ... 本文 ...
 	// </div>
 	if !strings.Contains(contentStr, "<div style=\"margin-left: 2em\">") {
 		t.Errorf("返信コメントが div でインデントされていません\n内容: %q", contentStr)
 	}
-	if !strings.Contains(contentStr, "#### コメント 1-1\n\n") {
-		t.Errorf("返信コメントの見出しが期待と異なります\n内容: %q", contentStr)
+	if !strings.Contains(contentStr, "<h4>コメント 1-1</h4>") {
+		t.Errorf("返信コメントの見出しが期待と異なります（HTML タグでない）\n内容: %q", contentStr)
+	}
+	// Markdown見出し #### が含まれないこと（目次から除外）
+	if strings.Contains(contentStr, "#### コメント 1-1") {
+		t.Errorf("返信コメントが Markdown 見出しで出力されています（目次から除外されません）\n内容: %q", contentStr)
 	}
 	if !strings.Contains(contentStr, "返信コメント") {
 		t.Errorf("返信コメントの本文が含まれていません\n内容: %q", contentStr)
