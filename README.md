@@ -30,13 +30,15 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 | 内部ページリンク | 相対パスリンク |
 | ユーザーメンション | `@ユーザー名` |
 | 絵文字（emoticon） | Unicode 絵文字 |
+| ページプロパティ（details） | 本文の表 + front matter の `[[properties]]` |
+| ページプロパティレポート（detailssummary） | `{{< page-properties-report >}}` ショートコード（条件はCQLから変換） |
 
 ## 動作要件
 
 - Go 1.25 以上
 - Atlassian API トークン（[生成ページ](https://id.atlassian.com/manage-profile/security/api-tokens)）
 - `golangci-lint`（`make lint` を使用する場合）
-- `hugo`（Hugo CLI）0.120.0 以上
+- `hugo`（Hugo CLI）0.146.0 以上
 - `Node.js` 18 以上（`npx pagefind` を使用する場合）
 
 ## セットアップ

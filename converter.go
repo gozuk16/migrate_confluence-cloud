@@ -210,6 +210,11 @@ func (c *Converter) ConvertADF(adfJSON string, attachmentMap map[string]string) 
 	return convertADF(adfJSON, attachmentMap)
 }
 
+// ConvertADFPage は ADF JSON 文字列を Markdown に変換し、ページプロパティと警告もあわせて返す（ページ本文用）
+func (c *Converter) ConvertADFPage(adfJSON string, attachmentMap map[string]string) (adfResult, error) {
+	return convertADFPage(adfJSON, attachmentMap)
+}
+
 // preprocess はConfluence固有要素を標準HTMLに変換する
 func (c *Converter) preprocess(xhtml string) (string, error) {
 	wrapped := "<html><body>" + xhtml + "</body></html>"
