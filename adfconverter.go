@@ -29,19 +29,36 @@ type ADFMark struct {
 // adfRenderer は ADF ノードツリーを Markdown に変換する
 type adfRenderer struct {
 	attachmentMap map[string]string // media UUID → ファイル名
+	properties    []PageProperty    // details マクロから集めたページプロパティ（出現順）
+	seenProps     map[string]bool   // 収集済みの項目名
+	warnings      []string          // 変換時の警告（呼び出し側がログに出す）
+}
+
+// adfResult はページ本文の変換結果
+type adfResult struct {
+	Markdown   string
+	Properties []PageProperty
+	Warnings   []string
 }
 
 // convertADF は ADF JSON 文字列を Markdown に変換するエントリーポイント
 func convertADF(adfJSON string, attachmentMap map[string]string) (string, error) {
+	res, err := convertADFPage(adfJSON, attachmentMap)
+	return res.Markdown, err
+}
+
+// convertADFPage は ADF JSON 文字列を Markdown に変換し、ページプロパティと警告もあわせて返す
+func convertADFPage(adfJSON string, attachmentMap map[string]string) (adfResult, error) {
 	if adfJSON == "" {
-		return "", nil
+		return adfResult{}, nil
 	}
 	var root ADFNode
 	if err := json.Unmarshal([]byte(adfJSON), &root); err != nil {
-		return "", fmt.Errorf("ADF JSONパースエラー: %w", err)
+		return adfResult{}, fmt.Errorf("ADF JSONパースエラー: %w", err)
 	}
 	r := &adfRenderer{attachmentMap: attachmentMap}
-	return strings.TrimSpace(r.renderNode(root, "")), nil
+	md := strings.TrimSpace(r.renderNode(root, ""))
+	return adfResult{Markdown: md, Properties: r.properties, Warnings: r.warnings}, nil
 }
 
 // renderNode はノードタイプに応じて変換を dispatch する
@@ -887,13 +904,17 @@ func (r *adfRenderer) renderLayoutColumn(node ADFNode, indent string) string {
 	return "<div class=\"layout-column\"" + style + ">\n\n" + inner + "\n\n</div>"
 }
 
-func (r *adfRenderer) renderExtension(node ADFNode) string {
-	key := ""
-	if node.Attrs != nil {
-		if k, ok := node.Attrs["extensionKey"].(string); ok {
-			key = k
-		}
+// extensionKey は拡張ノードのマクロ名（extensionKey）を返す
+func extensionKey(node ADFNode) string {
+	if node.Attrs == nil {
+		return ""
 	}
+	k, _ := node.Attrs["extensionKey"].(string)
+	return k
+}
+
+func (r *adfRenderer) renderExtension(node ADFNode) string {
+	key := extensionKey(node)
 	if key == "toc" {
 		return "{{< toc >}}"
 	}
@@ -901,6 +922,9 @@ func (r *adfRenderer) renderExtension(node ADFNode) string {
 }
 
 func (r *adfRenderer) renderBodiedExtension(node ADFNode) string {
+	if extensionKey(node) == "details" {
+		r.collectPageProperties(node.Content)
+	}
 	if len(node.Content) > 0 {
 		return r.renderBlockChildren(node.Content, "")
 	}
