@@ -86,3 +86,10 @@
   - ブラウザは `open` 付きで描画された details に読み込み時 toggle イベントを飛ばすが、リスナーより先に飛ぶことがあるためイベントには頼らず明示的に記録する
   - Playwright（Firefox）で「開いて移動→開いたまま」「閉じて移動→閉じたまま」「閉じたフォルダ配下のページへ移動→自動で開く」を確認
   - 利用者向け注意: JavaScript無効時は従来どおり（現在ページの祖先のみ開く）。localStorageが使えない環境ではページ内の操作のみ有効
+- [x] Confluenceの「レイアウト」（複数カラム表示）の再現
+  - 現状調査: ADF変換では `layoutSection`/`layoutColumn` の子要素を単純連結しており、カラム幅・横並びの情報が失われていた（実データで確認: 3カラム均等幅 `width: 33.33` × 3 が単なる縦並びテキストになっていた）
+  - 再現方式はCSSクラス＋テーマ側スタイル方式を採用（Goコードは構造とカラム幅（CSSカスタムプロパティ `--col-width`）だけを出力し、横並び・レスポンシブ折り返しはテーマのCSSで一元管理。既存のテーブル・ツリー表示と同じ設計パターン）
+  - `adfconverter.go`: `layoutSection` → `<div class="layout-section">`、`layoutColumn` → `<div class="layout-column" style="--col-width: N%">` に変換（TDDで実装、width未指定時はstyle属性なし）
+  - テーマ側（hugo-theme-docs submodule）の `assets/css/main.css` に `.layout-section`（flex, flex-wrap: wrap）/`.layout-column`（flex-basisに`--col-width`、min-width: 200pxで折り返し）を追加
+  - 利用者向け注意: `%`指定のflex-basisはgapを考慮しないため、gap 1個分を差し引いて近似している（厳密な計算ではないが実用上ははみ出さない）
+  - 実データ（`SCRUM/2026-5-13 テスト議事録`、3カラムレイアウトを含む）で `convert` 再変換とHugo表示（PC幅・モバイル幅420px）を確認。PC幅では3カラム横並び、420px幅では自動的に縦積みに折り返されることを確認

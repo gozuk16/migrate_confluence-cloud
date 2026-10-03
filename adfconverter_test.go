@@ -615,17 +615,33 @@ func TestConvertADF_MediaFileUnknown(t *testing.T) {
 	}
 }
 
+// TestConvertADF_LayoutSection は複数カラムのレイアウトが横並び用の div 構造（width属性はCSS変数 --col-width）に変換されることを確認する
 func TestConvertADF_LayoutSection(t *testing.T) {
 	adf := adfDoc(`{"type":"layoutSection","content":[
-        {"type":"layoutColumn","content":[{"type":"paragraph","content":[{"type":"text","text":"Left"}]}]},
-        {"type":"layoutColumn","content":[{"type":"paragraph","content":[{"type":"text","text":"Right"}]}]}
+        {"type":"layoutColumn","attrs":{"width":33.33},"content":[{"type":"paragraph","content":[{"type":"text","text":"Left"}]}]},
+        {"type":"layoutColumn","attrs":{"width":66.67},"content":[{"type":"paragraph","content":[{"type":"text","text":"Right"}]}]}
     ]}`)
 	got, err := convertADF(adf, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(got, "Left") || !strings.Contains(got, "Right") {
-		t.Errorf("got %q, want layout content", got)
+	want := `<div class="layout-section">
+
+<div class="layout-column" style="--col-width: 33.33%">
+
+Left
+
+</div>
+
+<div class="layout-column" style="--col-width: 66.67%">
+
+Right
+
+</div>
+
+</div>`
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }
 
@@ -1208,6 +1224,27 @@ func TestConvertADF_AlignmentEnd(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	want := "<div style=\"text-align: right\">\n\n右\n\n</div>"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestConvertADF_LayoutColumnNoWidth は width 属性が無い layoutColumn が style 属性なしで出力されることを確認する
+func TestConvertADF_LayoutColumnNoWidth(t *testing.T) {
+	adf := adfDoc(`{"type":"layoutSection","content":[{"type":"layoutColumn","content":[{"type":"paragraph","content":[` + adfText("幅なし") + `]}]}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `<div class="layout-section">
+
+<div class="layout-column">
+
+幅なし
+
+</div>
+
+</div>`
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}

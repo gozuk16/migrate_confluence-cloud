@@ -84,9 +84,9 @@ func (r *adfRenderer) renderNode(node ADFNode, indent string) string {
 	case "mediaSingle", "mediaGroup":
 		return r.renderMediaContainer(node)
 	case "layoutSection":
-		return r.renderBlockChildren(node.Content, indent)
+		return r.renderLayoutSection(node, indent)
 	case "layoutColumn":
-		return r.renderBlockChildren(node.Content, indent)
+		return r.renderLayoutColumn(node, indent)
 	case "extension", "inlineExtension":
 		return r.renderExtension(node)
 	case "bodiedExtension":
@@ -863,6 +863,28 @@ func (r *adfRenderer) renderMedia(node ADFNode) string {
 
 func (r *adfRenderer) renderMediaInline(node ADFNode) string {
 	return r.renderMedia(node)
+}
+
+// renderLayoutSection はConfluenceの複数カラムレイアウトを、横並び用の
+// div（class="layout-section"）に変換する。実際の横並び・レスポンシブ折り返しは
+// テーマ側CSSが担当し、ここでは構造とカラム幅のみを出力する。
+func (r *adfRenderer) renderLayoutSection(node ADFNode, indent string) string {
+	inner := r.renderBlockChildren(node.Content, indent)
+	return "<div class=\"layout-section\">\n\n" + inner + "\n\n</div>"
+}
+
+// renderLayoutColumn はレイアウトの1カラムを div（class="layout-column"）に変換する。
+// ADFのwidth属性（%）はCSSカスタムプロパティ --col-width としてstyle属性に埋め込み、
+// テーマ側CSSの flex-basis で参照する。width未指定時はテーマ側の既定値に委ねる。
+func (r *adfRenderer) renderLayoutColumn(node ADFNode, indent string) string {
+	inner := r.renderBlockChildren(node.Content, indent)
+	style := ""
+	if node.Attrs != nil {
+		if w, ok := node.Attrs["width"].(float64); ok {
+			style = fmt.Sprintf(" style=\"--col-width: %s%%\"", strconv.FormatFloat(w, 'f', -1, 64))
+		}
+	}
+	return "<div class=\"layout-column\"" + style + ">\n\n" + inner + "\n\n</div>"
 }
 
 func (r *adfRenderer) renderExtension(node ADFNode) string {
