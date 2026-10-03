@@ -30,6 +30,8 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 | 内部ページリンク | 相対パスリンク |
 | ユーザーメンション | `@ユーザー名` |
 | 絵文字（emoticon） | Unicode 絵文字 |
+| ページプロパティ（details） | 本文の表 + front matter の `[[properties]]` |
+| ページプロパティレポート（detailssummary） | `{{< page-properties-report >}}` ショートコード（条件はCQLから変換） |
 
 ## 動作要件
 
