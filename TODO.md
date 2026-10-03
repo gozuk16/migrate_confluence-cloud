@@ -2,17 +2,7 @@
 
 ## 進行中
 
-- [ ] ページプロパティレポート（detailssummary）の再現
-  - [x] 現状調査: `SCRUM/2026-8-8` の detailssummary が `<!-- macro: detailssummary -->` になり何も表示されない。子ページ メモ / メモ2 に details マクロとラベル memo がある
-  - [x] 設計（CQLはGoで解析しショートコード引数に変換、集計はHugo側）: `docs/superpowers/specs/2026-10-03-page-properties-report-design.md`
-  - [x] 仕様書のユーザー確認
-  - [x] 実装計画の作成: `docs/superpowers/plans/2026-10-03-page-properties-report.md`
-  - [x] 実装（Go: details抽出・CQL解析・ショートコード出力 / テーマ: page-properties-report ショートコード、toc のテーマ移動）
-  - [x] 実データ・一時サイトでの動作確認
-    - `SCRUM` を再変換（警告なし）。`2026-8-8` に `{{< page-properties-report labels="memo" labels_mode="all" space="current" scope="children" root="current" >}}`、`メモ` の front matter に `[[properties]]` 3件
-    - `hugo` ビルド成功。ブラウザで `/scrum/2026-8-8/` に メモ（2026-10-03・release・あるか）と メモ2（2026-10-02・作業中・ないよ）の2行がタイトル順で表示、タイトルリンクで各ページへ移動可
-    - `/scrum/2026-5-13-テスト議事録/` の目次がテーマ側 toc で従来どおり表示
-  - [ ] PR作成（テーマ・親リポジトリ。親側で submodule ポインタも更新）
+（なし）
 
 ## 未着手
 
@@ -101,3 +91,17 @@
   - テーマ側（hugo-theme-docs submodule）の `assets/css/main.css` に `.layout-section`（flex, flex-wrap: wrap）/`.layout-column`（flex-basisに`--col-width`、min-width: 200pxで折り返し）を追加
   - 利用者向け注意: `%`指定のflex-basisはgapを考慮しないため、gap 1個分を差し引いて近似している（厳密な計算ではないが実用上ははみ出さない）
   - 実データ（`SCRUM/2026-5-13 テスト議事録`、3カラムレイアウトを含む）で `convert` 再変換とHugo表示（PC幅・モバイル幅420px）を確認。PC幅では3カラム横並び、420px幅では自動的に縦積みに折り返されることを確認
+- [x] ページプロパティレポート（detailssummary）の再現
+  - [x] 現状調査: `SCRUM/2026-8-8` の detailssummary が `<!-- macro: detailssummary -->` になり何も表示されない。子ページ メモ / メモ2 に details マクロとラベル memo がある
+  - [x] 設計（CQLはGoで解析しショートコード引数に変換、集計はHugo側）: `docs/superpowers/specs/2026-10-03-page-properties-report-design.md`
+  - [x] 仕様書のユーザー確認
+  - [x] 実装計画の作成: `docs/superpowers/plans/2026-10-03-page-properties-report.md`
+  - [x] 実装（Go: details抽出・CQL解析・ショートコード出力 / テーマ: page-properties-report ショートコード、toc のテーマ移動）
+  - [x] 実データ・一時サイトでの動作確認
+    - `SCRUM` を再変換（警告なし）。`2026-8-8` に `{{< page-properties-report labels="memo" labels_mode="all" space="current" scope="children" root="current" >}}`、`メモ` の front matter に `[[properties]]` 3件
+    - `hugo` ビルド成功。ブラウザで `/scrum/2026-8-8/` に メモ（2026-10-03・release・あるか）と メモ2（2026-10-02・作業中・ないよ）の2行がタイトル順で表示、タイトルリンクで各ページへ移動可
+    - `/scrum/2026-5-13-テスト議事録/` の目次がテーマ側 toc で従来どおり表示
+  - [x] 最終レビューの指摘を修正: ショートコード引数の `\` 末尾・改行でHugoビルドが失敗する問題、root が空のときの全件一致、全条件除外時の対象範囲、単一句の括弧、変換エラーのログ、README の Hugo 要件（0.146.0 以上）
+  - [x] PR作成（テーマ gozuk16/hugo-theme-docs#7 と親リポジトリ。親側で submodule ポインタも ed8048c に更新）
+  - 既知の制限（CHANGELOG に記載）: created 条件は front matter の date が最終更新日時のため lastmodified と同じ判定になる。日付比較は UTC の日単位。`- ` や `1. ` で始まるプロパティ値はレポートでリスト表示されることがある
+  - 後続候補: v2 API の Page.createdAt を取得して date に出す / front matter 出力を TOML 用のエスケープにする（現状は Go の %q）
