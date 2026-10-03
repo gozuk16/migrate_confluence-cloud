@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added（ページプロパティレポート再現）
+- Confluenceの「ページプロパティレポート」（detailssummaryマクロ）を一覧表として再現できるようにした。従来は `<!-- macro: detailssummary -->` というコメントになり何も表示されなかった
+- ページプロパティ（detailsマクロ）の表の各行を、front matterの `[[properties]]`（`key` / `value`）に出力するようにした。本文の表はこれまでどおり表示される
+- レポートの条件（CQL）は変換時に解析し、テーマの `page-properties-report` ショートコードの引数にする。対応する条件は label（=、in、!=、not in、label どうしの or）、space、parent、ancestor、title（=、~）、created / lastmodified（絶対日付と `now("-4w")` 形式）。相対日付はHugoのビルド時刻を基準に評価する。対応していない条件は変換ログに警告を出して除外する
+- 表示オプション headings、sortBy、reverseSort、firstcolumn、pageSize に対応した
+
+### Changed（目次ショートコードの配置）
+- `toc` ショートコードをサイト側（`hugo-site/layouts/shortcodes/`）からテーマ側（`layouts/_shortcodes/`）へ移した。表示は変わらない
+
 ### Added（レイアウト再現）
 - Confluenceの複数カラムレイアウト（layoutSection/layoutColumn）を、横並び表示として再現できるようにした。従来はカラム構造が失われ単純に縦へ連結されていた。ADF変換側は構造とカラム幅（CSSカスタムプロパティ `--col-width`）のみを出力し、横並び・レスポンシブ折り返しはテーマ側CSSで管理する。狭い画面（目安420px程度）では自動的に縦積みに折り返される
 

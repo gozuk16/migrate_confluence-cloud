@@ -7,8 +7,11 @@
   - [x] 設計（CQLはGoで解析しショートコード引数に変換、集計はHugo側）: `docs/superpowers/specs/2026-10-03-page-properties-report-design.md`
   - [x] 仕様書のユーザー確認
   - [x] 実装計画の作成: `docs/superpowers/plans/2026-10-03-page-properties-report.md`
-  - [ ] 実装（Go: details抽出・CQL解析・ショートコード出力 / テーマ: page-properties-report ショートコード、toc のテーマ移動）
-  - [ ] 実データ・一時サイトでの動作確認
+  - [x] 実装（Go: details抽出・CQL解析・ショートコード出力 / テーマ: page-properties-report ショートコード、toc のテーマ移動）
+  - [x] 実データ・一時サイトでの動作確認
+    - `SCRUM` を再変換（警告なし）。`2026-8-8` に `{{< page-properties-report labels="memo" labels_mode="all" space="current" scope="children" root="current" >}}`、`メモ` の front matter に `[[properties]]` 3件
+    - `hugo` ビルド成功。ブラウザで `/scrum/2026-8-8/` に メモ（2026-10-03・release・あるか）と メモ2（2026-10-02・作業中・ないよ）の2行がタイトル順で表示、タイトルリンクで各ページへ移動可
+    - `/scrum/2026-5-13-テスト議事録/` の目次がテーマ側 toc で従来どおり表示
   - [ ] PR作成（テーマ・親リポジトリ。親側で submodule ポインタも更新）
 
 ## 未着手
@@ -47,7 +50,7 @@
 - [x] 目次（toc）マクロのHugoショートコード変換対応（`{{< toc >}}` + toc.htmlショートコード追加）
   - main（PR #14マージ済み時点）へrebaseして統合。mainとの重複変更（mdwriter.goへのWriteFolder追加、コメント見出し変更）は行番号のみでコンフリクトなし
   - 実データ（`SCRUM/2026-5-13 テスト議事録`）で `make convert` 相当の再変換とHugo表示を確認。目次にセクション見出しのみ表示されコメント見出しは除外されることを確認
-  - `hugo-site/layouts/shortcodes/toc.html` はサイト直下に配置（テーマ`hugo-site/themes/hugo-theme-docs`側ではない）。Hugoの仕様上サイト側がテーマより優先されるため動作は問題ないが、他のテーマ関連ファイルとの一貫性の観点でテーマ側への統一は将来的な改善候補として残す
+  - `hugo-site/layouts/shortcodes/toc.html` はサイト直下に配置（テーマ`hugo-site/themes/hugo-theme-docs`側ではない）。Hugoの仕様上サイト側がテーマより優先されるため動作は問題ないが、他のテーマ関連ファイルとの一貫性の観点でテーマ側への統一は将来的な改善候補として残す → テーマへ移動済み（ページプロパティレポート対応時）
 - [x] コメントリプライ取得とstatusバッジ修正（PR #9に追加）
   - フッターコメントのリプライを `/footer-comments/{id}/children` から再帰取得し階層見出しで出力
   - リプライを深さに応じて `<div style="margin-left: {N}em">` でインデント表示
