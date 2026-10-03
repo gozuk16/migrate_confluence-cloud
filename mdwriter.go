@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -166,13 +167,18 @@ func extractFrontMatter(data []byte) string {
 func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label, comments []Comment, attachments []Attachment) (string, error) {
 	var sb strings.Builder
 
+	// 本文を先に変換する（ページプロパティを front matter に書くため）
+	attachmentMap := buildAttachmentMap(attachments)
+	res, convErr := w.converter.ConvertADFPage(page.Body.AtlasDocFormat.Value, attachmentMap)
+	for _, msg := range res.Warnings {
+		slog.Warn("変換時の警告", "pageTitle", page.Title, "detail", msg)
+	}
+
 	// Front Matter
-	sb.WriteString(w.generateFrontMatter(page, spaceKey, spaceTitle, parentTitle, labels))
+	sb.WriteString(w.generateFrontMatter(page, spaceKey, spaceTitle, parentTitle, labels, res.Properties))
 
 	// ページ本文
-	attachmentMap := buildAttachmentMap(attachments)
-	bodyMarkdown, err := w.converter.ConvertADF(page.Body.AtlasDocFormat.Value, attachmentMap)
-	if err != nil {
+	if convErr != nil {
 		// 変換エラーの場合は生 ADF JSON をコードブロックとして出力
 		sb.WriteString("\n<!-- 変換エラーのため元のADF JSONを表示します -->\n")
 		sb.WriteString("```json\n")
@@ -180,7 +186,7 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 		sb.WriteString("\n```\n")
 	} else {
 		sb.WriteString("\n")
-		sb.WriteString(bodyMarkdown)
+		sb.WriteString(res.Markdown)
 		sb.WriteString("\n")
 	}
 
@@ -264,7 +270,7 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 }
 
 // generateFrontMatter はHugo Front Matter (TOML形式) を生成する
-func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label) string {
+func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label, props []PageProperty) string {
 	var sb strings.Builder
 
 	sb.WriteString("+++\n")
@@ -305,6 +311,13 @@ func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentT
 	// Confluence WebUI URL
 	if page.Links.WebUI != "" {
 		sb.WriteString(fmt.Sprintf("confluence_url = %q\n", page.Links.WebUI))
+	}
+
+	// ページプロパティ（details マクロ）。TOML の配列テーブルなので必ず最後に書く
+	for _, p := range props {
+		sb.WriteString("[[properties]]\n")
+		sb.WriteString(fmt.Sprintf("  key = %q\n", p.Key))
+		sb.WriteString(fmt.Sprintf("  value = %q\n", p.Value))
 	}
 
 	sb.WriteString("+++\n")

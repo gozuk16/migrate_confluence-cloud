@@ -637,3 +637,69 @@ func TestMDWriter_WriteFolder(t *testing.T) {
 		}
 	})
 }
+
+func TestMDWriter_FrontMatterProperties(t *testing.T) {
+	tmpDir := t.TempDir()
+	writer := newTestMDWriter(tmpDir)
+
+	adf := `{"version":1,"type":"doc","content":[{"type":"bodiedExtension","attrs":{"extensionKey":"details"},"content":[{"type":"table","content":[` +
+		`{"type":"tableRow","content":[{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"日付"}]}]},{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"2026-10-03"}]}]}]},` +
+		`{"type":"tableRow","content":[{"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"ステータス"}]}]},{"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"status","attrs":{"color":"green","text":"release"}}]}]}]}` +
+		`]}]}]}`
+	page := &Page{
+		ID:      "1",
+		Title:   "プロパティつき",
+		SpaceID: "67890",
+		Body:    PageBody{AtlasDocFormat: AtlasDocFormat{Value: adf}},
+		Links:   Links{WebUI: "/spaces/TEST/pages/1"},
+	}
+	labels := []Label{{Name: "memo"}}
+	if err := writer.WritePage(page, "TEST", "テストスペース", "", labels, nil, nil); err != nil {
+		t.Fatalf("WritePage エラー: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "index.md"))
+	if err != nil {
+		t.Fatalf("読み込みエラー: %v", err)
+	}
+	content := string(data)
+	fm := extractFrontMatter(data)
+
+	// [[properties]] は他のキーより後ろ（TOML の配列テーブルのため）
+	idxProps := strings.Index(fm, "[[properties]]")
+	idxURL := strings.Index(fm, "confluence_url")
+	idxLabels := strings.Index(fm, "labels =")
+	if idxProps < 0 || idxProps < idxURL || idxProps < idxLabels {
+		t.Fatalf("[[properties]] が front matter の末尾にありません:\n%s", fm)
+	}
+	for _, want := range []string{
+		"  key = \"日付\"\n  value = \"2026-10-03\"\n",
+		"  key = \"ステータス\"\n",
+		`>release</span>`,
+	} {
+		if !strings.Contains(fm, want) {
+			t.Errorf("front matter に %q がありません:\n%s", want, fm)
+		}
+	}
+	// 本文の表も残る
+	if !strings.Contains(content, "| 日付 | 2026-10-03 |") {
+		t.Errorf("本文の表がありません:\n%s", content)
+	}
+}
+
+func TestMDWriter_NoPropertiesNoTable(t *testing.T) {
+	tmpDir := t.TempDir()
+	writer := newTestMDWriter(tmpDir)
+	page := &Page{
+		ID:      "2",
+		Title:   "プロパティなし",
+		SpaceID: "67890",
+		Body:    PageBody{AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[]}`}},
+	}
+	if err := writer.WritePage(page, "TEST", "", "", nil, nil, nil); err != nil {
+		t.Fatalf("WritePage エラー: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title), "index.md"))
+	if strings.Contains(string(data), "[[properties]]") {
+		t.Errorf("プロパティが無いのに [[properties]] が出力されています:\n%s", data)
+	}
+}
