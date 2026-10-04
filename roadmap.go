@@ -64,9 +64,13 @@ const (
 	rmMaxRows   = 50  // 1レーンの行数
 )
 
+// roadmapFilePrefix は書き出す SVG のファイル名の接頭辞。
+// 同じフォルダに置かれる Confluence の添付ファイルと名前がぶつかりにくいよう、専用の接頭辞にしている
+const roadmapFilePrefix = "confluence-roadmap-"
+
 var roadmapColorRe = regexp.MustCompile(`^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$`)
 
-// renderRoadmap は roadmap マクロを SVG ファイル（ページ内の出現順に roadmap-1.svg, roadmap-2.svg…）にし、
+// renderRoadmap は roadmap マクロを SVG ファイル（ページ内の出現順に confluence-roadmap-1.svg, confluence-roadmap-2.svg…）にし、
 // 本文にはそれを読み込む roadmap ショートコードを出す。source を読めないときは警告を記録し、従来どおりのコメントを返す
 func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 	src, err := url.PathUnescape(macroParams(node)["source"])
@@ -77,7 +81,7 @@ func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 			for _, w := range warns {
 				r.warnings = append(r.warnings, "ロードマップ: "+w)
 			}
-			name := fmt.Sprintf("roadmap-%d.svg", countRoadmapFiles(r.files)+1)
+			name := fmt.Sprintf("%s%d.svg", roadmapFilePrefix, countRoadmapFiles(r.files)+1)
 			r.files = append(r.files, PageFile{Name: name, Data: []byte(svg)})
 			return `{{< roadmap src="` + name + `" >}}`
 		}
@@ -90,7 +94,7 @@ func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 func countRoadmapFiles(files []PageFile) int {
 	n := 0
 	for _, f := range files {
-		if strings.HasPrefix(f.Name, "roadmap-") {
+		if strings.HasPrefix(f.Name, roadmapFilePrefix) {
 			n++
 		}
 	}

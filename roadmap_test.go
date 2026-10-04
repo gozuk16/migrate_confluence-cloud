@@ -161,11 +161,11 @@ func TestConvertADFPage_RoadmapMacro(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if res.Markdown != `{{< roadmap src="roadmap-1.svg" >}}` {
+	if res.Markdown != `{{< roadmap src="confluence-roadmap-1.svg" >}}` {
 		t.Errorf("本文には SVG ファイルを読み込むショートコードを出すこと: %q", res.Markdown)
 	}
-	if len(res.Files) != 1 || res.Files[0].Name != "roadmap-1.svg" || !strings.HasPrefix(string(res.Files[0].Data), "<svg ") {
-		t.Errorf("SVG を roadmap-1.svg として返すこと: %+v", res.Files)
+	if len(res.Files) != 1 || res.Files[0].Name != "confluence-roadmap-1.svg" || !strings.HasPrefix(string(res.Files[0].Data), "<svg ") {
+		t.Errorf("SVG を confluence-roadmap-1.svg として返すこと: %+v", res.Files)
 	}
 
 	macro := `{"type":"extension","attrs":{"extensionKey":"roadmap","parameters":{"macroParams":{"source":{"value":"` + url.PathEscape(testRoadmapSource) + `"}}}}}`
@@ -173,8 +173,8 @@ func TestConvertADFPage_RoadmapMacro(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(res.Markdown, `src="roadmap-2.svg"`) || len(res.Files) != 2 || res.Files[1].Name != "roadmap-2.svg" {
-		t.Errorf("ページ内の2つ目は roadmap-2.svg にすること: %q / %d files", res.Markdown, len(res.Files))
+	if !strings.Contains(res.Markdown, `src="confluence-roadmap-2.svg"`) || len(res.Files) != 2 || res.Files[1].Name != "confluence-roadmap-2.svg" {
+		t.Errorf("ページ内の2つ目は confluence-roadmap-2.svg にすること: %q / %d files", res.Markdown, len(res.Files))
 	}
 
 	bad := adfDoc(`{"type":"extension","attrs":{"extensionKey":"roadmap","parameters":{"macroParams":{"source":{"value":"%7Bbroken"}}}}}`)

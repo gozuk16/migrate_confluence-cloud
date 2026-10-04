@@ -718,25 +718,57 @@ func TestMDWriter_WritesRoadmapSVG(t *testing.T) {
 		t.Fatal(err)
 	}
 	// 前回の変換で残った SVG は消える
-	if err := os.WriteFile(filepath.Join(pageDir, "roadmap-9.svg"), []byte("old"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pageDir, "confluence-roadmap-9.svg"), []byte("old"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := writer.WritePage(page, "TEST", "", "", nil, nil, nil); err != nil {
 		t.Fatalf("WritePage エラー: %v", err)
 	}
-	data, err := os.ReadFile(filepath.Join(pageDir, "roadmap-1.svg"))
+	data, err := os.ReadFile(filepath.Join(pageDir, "confluence-roadmap-1.svg"))
 	if err != nil {
-		t.Fatalf("roadmap-1.svg が書き出されていません: %v", err)
+		t.Fatalf("confluence-roadmap-1.svg が書き出されていません: %v", err)
 	}
 	if !strings.HasPrefix(string(data), "<svg ") {
 		t.Errorf("SVG の内容ではありません: %q", data[:min(40, len(data))])
 	}
-	if _, err := os.Stat(filepath.Join(pageDir, "roadmap-9.svg")); !os.IsNotExist(err) {
-		t.Error("前回の変換で残った roadmap-9.svg を消すこと")
+	if _, err := os.Stat(filepath.Join(pageDir, "confluence-roadmap-9.svg")); !os.IsNotExist(err) {
+		t.Error("前回の変換で残った confluence-roadmap-9.svg を消すこと")
 	}
 	md, _ := os.ReadFile(filepath.Join(pageDir, "index.md"))
-	if !strings.Contains(string(md), `{{< roadmap src="roadmap-1.svg" >}}`) {
+	if !strings.Contains(string(md), `{{< roadmap src="confluence-roadmap-1.svg" >}}`) {
 		t.Errorf("本文にショートコードがありません:\n%s", md)
+	}
+}
+
+func TestMDWriter_RoadmapSVGKeepsAttachments(t *testing.T) {
+	tmpDir := t.TempDir()
+	writer := newTestMDWriter(tmpDir)
+	src := `{"title":"R","timeline":{"startDate":"2026-10-01 00:00:00","endDate":"2026-12-01 00:00:00","displayOption":"MONTH"},"lanes":[],"markers":[]}`
+	macro := `{"type":"extension","attrs":{"extensionKey":"roadmap","parameters":{"macroParams":{"source":{"value":"` + url.PathEscape(src) + `"}}}}}`
+	page := &Page{ID: "1", Title: "二つのロードマップ", SpaceID: "1",
+		Body: PageBody{AtlasDocFormat: AtlasDocFormat{Value: `{"version":1,"type":"doc","content":[` + macro + `,` + macro + `]}`}}}
+
+	pageDir := filepath.Join(tmpDir, "TEST", sanitizeFilename(page.Title))
+	if err := os.MkdirAll(pageDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// 生成するファイルと同じ名前の添付ファイル（ダウンロード済み）は消さない
+	attached := filepath.Join(pageDir, "confluence-roadmap-3.svg")
+	if err := os.WriteFile(attached, []byte("attachment"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	attachments := []Attachment{{Title: "confluence-roadmap-3.svg"}}
+
+	if err := writer.WritePage(page, "TEST", "", "", nil, nil, attachments); err != nil {
+		t.Fatalf("WritePage エラー: %v", err)
+	}
+	for _, name := range []string{"confluence-roadmap-1.svg", "confluence-roadmap-2.svg"} {
+		if _, err := os.Stat(filepath.Join(pageDir, name)); err != nil {
+			t.Errorf("%s が書き出されていません: %v", name, err)
+		}
+	}
+	if data, err := os.ReadFile(attached); err != nil || string(data) != "attachment" {
+		t.Errorf("添付ファイルを消したり上書きしたりしないこと: %q, %v", data, err)
 	}
 }

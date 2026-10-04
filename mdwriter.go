@@ -40,22 +40,37 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 		return fmt.Errorf("Markdownコンテンツ生成エラー: %w", err)
 	}
 
+	// 本文が参照するファイル（ロードマップの SVG）を先に書き出す。
+	// 途中で失敗しても、本文が存在しないファイルを参照したまま残らないようにするため
+	keep := map[string]bool{}
+	for _, f := range files {
+		if err := os.WriteFile(filepath.Join(pageDir, f.Name), f.Data, 0644); err != nil {
+			return fmt.Errorf("ファイル書き出しエラー (%s): %w", f.Name, err)
+		}
+		keep[f.Name] = true
+	}
+
 	// index.mdに書き出し
 	mdPath := filepath.Join(pageDir, "index.md")
 	if err := os.WriteFile(mdPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("Markdownファイル書き出しエラー: %w", err)
 	}
 
-	// 本文と一緒に使うファイル（ロードマップの SVG）。前回の変換で残ったものは消してから書き出す
-	stale, _ := filepath.Glob(filepath.Join(pageDir, "roadmap-*.svg"))
+	// 前回の変換で書き出し、今回は使わなくなったファイルを消す。
+	// 同じフォルダには添付ファイルも置かれるので、添付と同じ名前のものは消さない
+	for _, a := range attachments {
+		keep[sanitizeFilename(a.Title)] = true
+	}
+	stale, err := filepath.Glob(filepath.Join(pageDir, roadmapFilePrefix+"*.svg"))
+	if err != nil {
+		return fmt.Errorf("古いファイルの検索に失敗しました: %w", err)
+	}
 	for _, p := range stale {
+		if keep[filepath.Base(p)] {
+			continue
+		}
 		if err := os.Remove(p); err != nil {
 			return fmt.Errorf("古いファイルの削除に失敗しました: %w", err)
-		}
-	}
-	for _, f := range files {
-		if err := os.WriteFile(filepath.Join(pageDir, f.Name), f.Data, 0644); err != nil {
-			return fmt.Errorf("ファイル書き出しエラー (%s): %w", f.Name, err)
 		}
 	}
 
