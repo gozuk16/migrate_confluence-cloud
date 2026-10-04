@@ -226,6 +226,7 @@ func TestRenderRoadmapSVG_Limits(t *testing.T) {
 			`{"title":"負の行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":-3},`+
 			`{"title":"小数の行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":1.0},`+
 			`{"title":"巨大な行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":3000},`+
+			`{"title":"極端な行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":1e300},`+
 			`{"title":"日付不正","startDate":"x","duration":1,"rowIndex":0}]}]`,
 		`[{"title":"日付不正","markerDate":"y"}]`)
 	got, warns, err := renderRoadmapSVG(src)
@@ -235,10 +236,10 @@ func TestRenderRoadmapSVG_Limits(t *testing.T) {
 	if !strings.Contains(got, ">負の行</text>") || !strings.Contains(got, ">小数の行</text>") {
 		t.Error("負の行番号は0行目、小数表記の行番号も読めること")
 	}
-	if strings.Contains(got, "巨大な行") {
+	if strings.Contains(got, "巨大な行") || strings.Contains(got, "極端な行") {
 		t.Error("行番号が上限を超えるバーは出さないこと")
 	}
-	if len(warns) != 1 || !strings.Contains(warns[0], "3件") {
+	if len(warns) != 1 || !strings.Contains(warns[0], "4件") {
 		t.Errorf("省いたバー・マーカーの件数を警告すること: %q", warns)
 	}
 }

@@ -103,11 +103,21 @@ func renderRoadmapSVG(src string) (out string, warns []string, err error) {
 		warns = append(warns, fmt.Sprintf("終了日（%s）が開始日（%s）より前のため、開始日の月（週）だけを表示します", d.Timeline.EndDate, d.Timeline.StartDate))
 	}
 	sc := newRoadmapScale(start, end, d.Timeline.DisplayOption)
-	if limit := map[bool]int{false: rmMaxMonths, true: rmMaxWeeks}[sc.week]; sc.cols > limit {
+	limit := rmMaxMonths
+	if sc.week {
+		limit = rmMaxWeeks
+	}
+	if sc.cols > limit {
 		return "", nil, fmt.Errorf("表示期間が長すぎます（%d 列。上限 %d 列）", sc.cols, limit)
 	}
 	skipped := 0 // 日付を読めない・行番号が上限を超えるため省いたバーとマーカーの数
-	rowOf := func(v float64) int { return max(int(math.Round(v)), 0) }
+	// 巨大な小数を int に変換した結果は処理系依存なので、先に範囲を絞ってから変換する
+	rowOf := func(v float64) int {
+		if v >= rmMaxRows {
+			return rmMaxRows
+		}
+		return max(int(math.Round(v)), 0)
+	}
 	x := func(pos float64) float64 { return rmTitleW + rmPadL + pos*rmColW }
 	width := int(x(float64(sc.cols))) + rmPadR
 
