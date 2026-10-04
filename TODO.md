@@ -105,3 +105,10 @@
   - [x] PR作成（テーマ gozuk16/hugo-theme-docs#7 と親リポジトリ。親側で submodule ポインタも ed8048c に更新）
   - 既知の制限（CHANGELOG に記載）: created 条件は front matter の date が最終更新日時のため lastmodified と同じ判定になる。日付比較は UTC の日単位。`- ` や `1. ` で始まるプロパティ値はレポートでリスト表示されることがある
   - 後続候補: v2 API の Page.createdAt を取得して date に出す / front matter 出力を TOML 用のエスケープにする（現状は Go の %q）
+- [x] 子ページ一覧（children マクロ、Confluence の「子アイテム」）の再現
+  - [x] 現状調査: `SCRUM/2026-8-8` の children マクロ（allChildren=true, depth=2）が `<!-- macro: children -->` になり何も表示されない。Confluence では「メモ ＞ 2026（フォルダ）、メモ2」と表示される
+  - [x] 設計（ユーザー承認済み）: 変換器は `{{< children ... >}}` を出力し、テーマのショートコードが parent_id をたどって一覧にする。主要オプション（depth・allChildren・sortAndReverse・first・page・style）に対応、抜粋（excerpt）は対象外
+  - [x] 実装（Go: `childrenmacro.go`、テーマ: `layouts/_shortcodes/children.html` / `layouts/_partials/children-list.html`）
+  - [x] 動作確認: 一時サイトで深さ・並び順・件数・見出し・起点ページ・フォルダ・エスケープを確認。実データで Confluence と同じ「メモ ＞ 2026（フォルダ）、メモ2」の表示を確認
+  - [x] コードレビュー（サブエージェント）: 「API: 概要」のようなタイトルをスペースキー付きと誤判定する問題、先頭ゼロの数値、索引の毎回構築を修正。フォルダが日付順で最も古い扱いになる点は既知の制限として記載
+  - [x] PR作成（テーマ gozuk16/hugo-theme-docs#8 と親リポジトリ。親側で submodule ポインタも 12b7656 に更新）

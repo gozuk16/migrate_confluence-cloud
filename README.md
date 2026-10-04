@@ -32,6 +32,7 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 | 絵文字（emoticon） | Unicode 絵文字 |
 | ページプロパティ（details） | 本文の表 + front matter の `[[properties]]` |
 | ページプロパティレポート（detailssummary） | `{{< page-properties-report >}}` ショートコード（条件はCQLから変換） |
+| 子ページ一覧（children） | `{{< children >}}` ショートコード（入れ子の箇条書き） |
 
 ## 動作要件
 

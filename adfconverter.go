@@ -919,6 +919,8 @@ func (r *adfRenderer) renderExtension(node ADFNode) string {
 		return "{{< toc >}}"
 	case "detailssummary":
 		return r.renderPropertiesReport(node)
+	case "children":
+		return r.renderChildren(node)
 	default:
 		return "<!-- macro: " + key + " -->"
 	}
