@@ -23,8 +23,12 @@ func TestBuildChildrenShortcode(t *testing.T) {
 		{"見出し以外のstyleは無視", map[string]string{"style": "h7"}, `{{< children >}}`},
 		{"別ページ", map[string]string{"page": "議事録"}, `{{< children page="議事録" >}}`},
 		{"スペースつきの別ページ", map[string]string{"page": "DEV:設計: 概要"}, `{{< children page="設計: 概要" space="DEV" >}}`},
-		{"スペースキーでない接頭辞は分けない", map[string]string{"page": "Note: 議事録"}, `{{< children page="Note: 議事録" >}}`},
+		{"小文字始まりの接頭辞は分けない", map[string]string{"page": "Note:議事録"}, `{{< children page="Note:議事録" >}}`},
 		{"引用符を含むページ名", map[string]string{"page": `a"b`}, `{{< children page="a\"b" >}}`},
+		{"コロンの後に空白があるタイトルは分けない", map[string]string{"page": "API: 概要"}, `{{< children page="API: 概要" >}}`},
+		{"個人スペースのキー", map[string]string{"page": "~5571abc:メモ"}, `{{< children page="メモ" space="~5571abc" >}}`},
+		{"先頭ゼロの数値は正規化", map[string]string{"allChildren": "true", "depth": "02", "first": "007"}, `{{< children all="true" depth="2" first="7" >}}`},
+		{"ゼロだけの数値は無視", map[string]string{"depth": "00"}, `{{< children >}}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

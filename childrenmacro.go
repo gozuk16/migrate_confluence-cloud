@@ -2,13 +2,15 @@ package main
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 var (
-	positiveIntRe   = regexp.MustCompile(`^[1-9][0-9]*$`)
-	headingStyleRe  = regexp.MustCompile(`^h[1-6]$`)
-	spaceKeyTitleRe = regexp.MustCompile(`^([A-Z0-9~]+):(.+)$`)
+	headingStyleRe = regexp.MustCompile(`^h[1-6]$`)
+	// "スペースキー:タイトル" 形式。キーは大文字英数字、個人スペースは "~" で始まる。
+	// "API: 概要" のようにコロンの後に空白があるものは通常のタイトルとして扱う
+	spaceKeyTitleRe = regexp.MustCompile(`^([A-Z0-9]+|~[A-Za-z0-9-]+):(\S.*)$`)
 )
 
 // renderChildren は children（子ページ一覧）マクロを children ショートコードに変換する
@@ -50,10 +52,10 @@ func buildChildrenShortcode(opts map[string]string) string {
 		{"page", page},
 		{"space", space},
 		{"all", all},
-		{"depth", matchOrEmpty(positiveIntRe, opts["depth"])},
+		{"depth", positiveIntOrEmpty(opts["depth"])},
 		{"sort", sortKey},
 		{"reverse", reverse},
-		{"first", matchOrEmpty(positiveIntRe, opts["first"])},
+		{"first", positiveIntOrEmpty(opts["first"])},
 		{"style", matchOrEmpty(headingStyleRe, opts["style"])},
 	}
 	var sb strings.Builder
@@ -66,6 +68,15 @@ func buildChildrenShortcode(opts map[string]string) string {
 	}
 	sb.WriteString(" >}}")
 	return sb.String()
+}
+
+// positiveIntOrEmpty は v が正の整数なら先頭のゼロを除いた10進表記を、それ以外は空文字を返す
+func positiveIntOrEmpty(v string) string {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
 }
 
 // matchOrEmpty は v が re に一致すればそのまま、一致しなければ空文字を返す
