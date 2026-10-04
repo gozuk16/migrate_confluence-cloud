@@ -34,7 +34,7 @@ type roadmapData struct {
 			Description string  `json:"description"`
 			StartDate   string  `json:"startDate"`
 			Duration    float64 `json:"duration"` // 列（月または週）の数
-			RowIndex    int     `json:"rowIndex"`
+			RowIndex    float64 `json:"rowIndex"` // 整数だが "1.0" のような表記もあり得るため小数で受ける
 		} `json:"bars"`
 	} `json:"lanes"`
 	Markers []struct {
@@ -57,16 +57,25 @@ const (
 	rmFontSize   = 12
 	rmMarkerH    = 48 // マーカー名（2行）を描く下側の余白
 	rmMarkerLine = 15
+
+	// 入力ミスや壊れたデータで出力が巨大にならないための上限
+	rmMaxMonths = 240 // 20年
+	rmMaxWeeks  = 520 // 10年
+	rmMaxRows   = 50  // 1レーンの行数
 )
 
-var roadmapColorRe = regexp.MustCompile(`^#[0-9A-Fa-f]{3,8}$`)
+var roadmapColorRe = regexp.MustCompile(`^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$`)
 
 // renderRoadmap は roadmap マクロを SVG にする。source を読めないときは警告を記録し、従来どおりのコメントを返す
 func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 	src, err := url.PathUnescape(macroParams(node)["source"])
 	if err == nil {
 		var svg string
-		if svg, err = renderRoadmapSVG(src); err == nil {
+		var warns []string
+		if svg, warns, err = renderRoadmapSVG(src); err == nil {
+			for _, w := range warns {
+				r.warnings = append(r.warnings, "ロードマップ: "+w)
+			}
 			return svg
 		}
 	}
@@ -75,21 +84,30 @@ func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 }
 
 // renderRoadmapSVG は source の JSON から、横スクロールする div で囲んだ SVG を作る。
-// Markdown の HTML ブロックが途切れないよう、出力は1行（空行なし）にする
-func renderRoadmapSVG(src string) (string, error) {
+// Markdown の HTML ブロックが途切れないよう、出力は1行（空行なし）にする。
+// 描けない要素を省いた場合などは warns に理由を返す
+func renderRoadmapSVG(src string) (out string, warns []string, err error) {
 	var d roadmapData
 	if err := json.Unmarshal([]byte(src), &d); err != nil {
-		return "", fmt.Errorf("JSON を解釈できません: %w", err)
+		return "", nil, fmt.Errorf("JSON を解釈できません: %w", err)
 	}
 	start, err := parseRoadmapTime(d.Timeline.StartDate)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	end, err := parseRoadmapTime(d.Timeline.EndDate)
 	if err != nil {
-		return "", err
+		return "", nil, err
+	}
+	if end.Before(start) {
+		warns = append(warns, fmt.Sprintf("終了日（%s）が開始日（%s）より前のため、開始日の月（週）だけを表示します", d.Timeline.EndDate, d.Timeline.StartDate))
 	}
 	sc := newRoadmapScale(start, end, d.Timeline.DisplayOption)
+	if limit := map[bool]int{false: rmMaxMonths, true: rmMaxWeeks}[sc.week]; sc.cols > limit {
+		return "", nil, fmt.Errorf("表示期間が長すぎます（%d 列。上限 %d 列）", sc.cols, limit)
+	}
+	skipped := 0 // 日付を読めない・行番号が上限を超えるため省いたバーとマーカーの数
+	rowOf := func(v float64) int { return max(int(math.Round(v)), 0) }
 	x := func(pos float64) float64 { return rmTitleW + rmPadL + pos*rmColW }
 	width := int(x(float64(sc.cols))) + rmPadR
 
@@ -100,7 +118,9 @@ func renderRoadmapSVG(src string) (string, error) {
 	for i, lane := range d.Lanes {
 		rows := rmMinRows
 		for _, b := range lane.Bars {
-			rows = max(rows, b.RowIndex+1)
+			if row := rowOf(b.RowIndex); row < rmMaxRows {
+				rows = max(rows, row+1)
+			}
 		}
 		laneTops[i], laneHs[i] = y, rows*rmRowH+rmBarGap
 		y += laneHs[i]
@@ -111,10 +131,14 @@ func renderRoadmapSVG(src string) (string, error) {
 		height = chartBottom + rmMarkerH
 	}
 
+	label := d.Title
+	if label == "" {
+		label = "ロードマップ"
+	}
 	var sb strings.Builder
-	fmt.Fprintf(&sb, `<div class="roadmap" style="overflow-x:auto;margin:1rem 0">`)
+	sb.WriteString(`<div class="roadmap" style="overflow-x:auto;margin:1rem 0">`)
 	fmt.Fprintf(&sb, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="%s" font-size="%d" style="display:block;max-width:none">`,
-		width, height, width, height, escapeSVG(d.Title), rmFontSize)
+		width, height, width, height, escapeSVG(label), rmFontSize)
 
 	// 見出し（年は最初の列と年が変わる列の上、月・週は列の中央）
 	for i, l := range sc.labels() {
@@ -150,7 +174,12 @@ func renderRoadmapSVG(src string) (string, error) {
 		// バー（表示期間の外にはみ出した部分は切り取る）
 		for _, b := range lane.Bars {
 			bs, err := parseRoadmapTime(b.StartDate)
-			if err != nil || b.Duration <= 0 {
+			row := rowOf(b.RowIndex)
+			if err != nil || row >= rmMaxRows {
+				skipped++
+				continue
+			}
+			if b.Duration <= 0 {
 				continue
 			}
 			s := sc.pos(bs)
@@ -160,14 +189,14 @@ func renderRoadmapSVG(src string) (string, error) {
 				continue
 			}
 			bx, bw := x(s), (e-s)*rmColW
-			by := top + rmBarGap + b.RowIndex*rmRowH
+			by := top + rmBarGap + row*rmRowH
 			tip := b.Title
 			if b.Description != "" {
 				tip += "\n" + b.Description
 			}
 			fmt.Fprintf(&sb, `<g><title>%s</title><rect x="%.1f" y="%d" width="%.1f" height="%d" rx="3" fill="%s"/>`, escapeSVG(tip), bx, by, bw, rmBarH, barColor)
 			fmt.Fprintf(&sb, `<text x="%.1f" y="%.1f" text-anchor="middle" dominant-baseline="central" font-weight="bold" fill="%s">%s</text></g>`,
-				bx+bw/2, float64(by)+rmBarH/2.0, textColor, escapeSVG(truncateRoadmapText(b.Title, bw-12, rmFontSize)))
+				bx+bw/2, float64(by+rmBarH/2), textColor, escapeSVG(truncateRoadmapText(b.Title, bw-12, rmFontSize)))
 		}
 	}
 
@@ -175,6 +204,7 @@ func renderRoadmapSVG(src string) (string, error) {
 	for _, m := range d.Markers {
 		mt, err := parseRoadmapTime(m.MarkerDate)
 		if err != nil {
+			skipped++
 			continue
 		}
 		p := sc.pos(mt)
@@ -182,15 +212,20 @@ func renderRoadmapSVG(src string) (string, error) {
 			continue
 		}
 		mx := x(p)
+		// 名前は線を中心に置くが、両端では図の外やレーン名の列にはみ出さないよう寄せる
+		lx := math.Min(math.Max(mx, rmTitleW+rmColW/2.0), float64(width)-rmColW/2.0)
 		fmt.Fprintf(&sb, `<g><title>%s</title><line x1="%.1f" y1="%d" x2="%.1f" y2="%d" stroke="#d04437" stroke-width="1.5"/>`, escapeSVG(m.Title), mx, rmHeaderH, mx, chartBottom+8)
 		for li, line := range wrapRoadmapText(m.Title, rmColW, rmFontSize, 2) {
-			fmt.Fprintf(&sb, `<text x="%.1f" y="%d" text-anchor="middle" fill="#d04437">%s</text>`, mx, chartBottom+22+li*rmMarkerLine, escapeSVG(line))
+			fmt.Fprintf(&sb, `<text x="%.1f" y="%d" text-anchor="middle" fill="#d04437">%s</text>`, lx, chartBottom+22+li*rmMarkerLine, escapeSVG(line))
 		}
 		sb.WriteString(`</g>`)
 	}
 
 	sb.WriteString(`</svg></div>`)
-	return sb.String(), nil
+	if skipped > 0 {
+		warns = append(warns, fmt.Sprintf("日付を読めない、または行番号が %d 以上のバー・マーカー %d件を省きました", rmMaxRows, skipped))
+	}
+	return sb.String(), warns, nil
 }
 
 // roadmapScale は日付を「先頭の列から何列目か」（小数）に換算する
@@ -209,7 +244,7 @@ type roadmapLabel struct {
 func newRoadmapScale(start, end time.Time, option string) roadmapScale {
 	if strings.EqualFold(option, "WEEK") {
 		s := mondayOf(start)
-		cols := int(mondayOf(end).Sub(s).Hours()/24/7) + 1
+		cols := int((mondayOf(end).Unix()-s.Unix())/86400/7) + 1
 		return roadmapScale{week: true, start: s, cols: max(cols, 1)}
 	}
 	s := time.Date(start.Year(), start.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -219,7 +254,8 @@ func newRoadmapScale(start, end time.Time, option string) roadmapScale {
 
 func (sc roadmapScale) pos(t time.Time) float64 {
 	if sc.week {
-		return t.Sub(sc.start).Hours() / 24 / 7
+		// time.Duration は約292年で飽和するため秒で計算する
+		return float64(t.Unix()-sc.start.Unix()) / 86400 / 7
 	}
 	months := (t.Year()-sc.start.Year())*12 + int(t.Month()-sc.start.Month())
 	daysInMonth := time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day()
@@ -331,7 +367,17 @@ func wrapRoadmapText(s string, maxW, fontSize float64, maxLines int) []string {
 	return lines
 }
 
-// escapeSVG は SVG（XML）の文字列・属性値用にエスケープする
+// escapeSVG は SVG（XML）の文字列・属性値用にエスケープする。
+// 出力を1行に保つため改行は文字参照にし（Markdown の HTML ブロックは空行で終わってしまう）、
+// XML で使えない制御文字は除き、Hugo のショートコードとして解釈されないよう "{{" も文字参照にする
 func escapeSVG(s string) string {
-	return html.EscapeString(s)
+	s = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s)
+	s = strings.Map(func(r rune) rune {
+		if r < 0x20 && r != '\n' && r != '\t' {
+			return -1
+		}
+		return r
+	}, s)
+	s = html.EscapeString(s)
+	return strings.NewReplacer("\n", "&#10;", "{{", "&#123;&#123;").Replace(s)
 }

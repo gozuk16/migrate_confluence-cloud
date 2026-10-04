@@ -115,12 +115,12 @@ const testRoadmapSource = `{"title":"ロードマップ プランナー","timeli
 	`"markers":[{"title":"マーカー1","markerDate":"2026-10-15 00:00:00"}]}`
 
 func TestRenderRoadmapSVG(t *testing.T) {
-	got, err := renderRoadmapSVG(testRoadmapSource)
+	got, _, err := renderRoadmapSVG(testRoadmapSource)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.HasPrefix(got, `<div class="roadmap"`) || !strings.HasSuffix(got, "</svg></div>") {
-		t.Errorf("div で囲んだ SVG であること: %q", got[:80])
+		t.Errorf("div で囲んだ SVG であること: %q", got[:min(80, len(got))])
 	}
 	if strings.Contains(got, "\n\n") {
 		t.Error("Markdown の HTML ブロックが途切れないよう空行を含めないこと")
@@ -149,10 +149,10 @@ func TestRenderRoadmapSVG(t *testing.T) {
 }
 
 func TestRenderRoadmapSVG_InvalidSource(t *testing.T) {
-	if _, err := renderRoadmapSVG("{broken"); err == nil {
+	if _, _, err := renderRoadmapSVG("{broken"); err == nil {
 		t.Error("壊れた JSON はエラーにすること")
 	}
-	if _, err := renderRoadmapSVG(`{"timeline":{"startDate":"x","endDate":"2027-01-01 00:00:00","displayOption":"MONTH"}}`); err == nil {
+	if _, _, err := renderRoadmapSVG(`{"timeline":{"startDate":"x","endDate":"2027-01-01 00:00:00","displayOption":"MONTH"}}`); err == nil {
 		t.Error("解釈できない日付はエラーにすること")
 	}
 }
@@ -178,5 +178,85 @@ func TestConvertADFPage_RoadmapMacro(t *testing.T) {
 	}
 	if len(res.Warnings) != 1 || !strings.HasPrefix(res.Warnings[0], "ロードマップ: ") {
 		t.Errorf("warnings = %q, want 1件（ロードマップ: で始まる）", res.Warnings)
+	}
+}
+
+func roadmapSource(timeline, lanes, markers string) string {
+	return `{"title":"T","timeline":` + timeline + `,"lanes":` + lanes + `,"markers":` + markers + `}`
+}
+
+func TestRenderRoadmapSVG_EscapesNewlinesAndShortcodes(t *testing.T) {
+	src := roadmapSource(`{"startDate":"2026-10-01 00:00:00","endDate":"2026-12-01 00:00:00","displayOption":"MONTH"}`,
+		`[{"title":"L\n\nX","color":{"lane":"#fff\" onload=\"x","bar":"red","text":"#ffffff"},"bars":[`+
+			`{"title":"{{< toc >}}","description":"一行目\r\n\r\n三行目\u0001","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":0}]}]`,
+		`[]`)
+	got, _, err := renderRoadmapSVG(src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(got, "\n") || strings.Contains(got, "\r") {
+		t.Error("改行は文字参照にし、出力を1行に保つこと")
+	}
+	if !strings.Contains(got, "一行目&#10;&#10;三行目") {
+		t.Error("ツールチップ内の改行は &#10; で残すこと")
+	}
+	if strings.Contains(got, "\u0001") {
+		t.Error("XML で使えない制御文字は除去すること")
+	}
+	if strings.Contains(got, "{{") {
+		t.Error("Hugo のショートコードとして解釈されないよう {{ をエスケープすること")
+	}
+	if strings.Contains(got, "onload") || strings.Contains(got, `fill="red"`) {
+		t.Error("#rrggbb 形式以外の色は既定色にすること")
+	}
+}
+
+func TestRenderRoadmapSVG_Limits(t *testing.T) {
+	huge := roadmapSource(`{"startDate":"0001-01-01 00:00:00","endDate":"9999-12-31 00:00:00","displayOption":"MONTH"}`, `[]`, `[]`)
+	if _, _, err := renderRoadmapSVG(huge); err == nil {
+		t.Error("表示期間が長すぎる場合はエラーにすること")
+	}
+	hugeWeek := roadmapSource(`{"startDate":"2000-01-01 00:00:00","endDate":"2100-01-01 00:00:00","displayOption":"WEEK"}`, `[]`, `[]`)
+	if _, _, err := renderRoadmapSVG(hugeWeek); err == nil {
+		t.Error("週表示でも期間が長すぎる場合はエラーにすること")
+	}
+
+	src := roadmapSource(`{"startDate":"2026-10-01 00:00:00","endDate":"2026-12-01 00:00:00","displayOption":"MONTH"}`,
+		`[{"title":"L","color":{},"bars":[`+
+			`{"title":"負の行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":-3},`+
+			`{"title":"小数の行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":1.0},`+
+			`{"title":"巨大な行","startDate":"2026-10-01 00:00:00","duration":1,"rowIndex":3000},`+
+			`{"title":"日付不正","startDate":"x","duration":1,"rowIndex":0}]}]`,
+		`[{"title":"日付不正","markerDate":"y"}]`)
+	got, warns, err := renderRoadmapSVG(src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(got, ">負の行</text>") || !strings.Contains(got, ">小数の行</text>") {
+		t.Error("負の行番号は0行目、小数表記の行番号も読めること")
+	}
+	if strings.Contains(got, "巨大な行") {
+		t.Error("行番号が上限を超えるバーは出さないこと")
+	}
+	if len(warns) != 1 || !strings.Contains(warns[0], "3件") {
+		t.Errorf("省いたバー・マーカーの件数を警告すること: %q", warns)
+	}
+}
+
+func TestRenderRoadmapSVG_EndBeforeStartWarns(t *testing.T) {
+	src := roadmapSource(`{"startDate":"2027-01-01 00:00:00","endDate":"2026-01-01 00:00:00","displayOption":"MONTH"}`, `[]`, `[]`)
+	_, warns, err := renderRoadmapSVG(src)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warns) != 1 {
+		t.Errorf("終了日が開始日より前なら警告すること: %q", warns)
+	}
+}
+
+func TestRoadmapScale_LeapDay(t *testing.T) {
+	sc := newRoadmapScale(mustRoadmapTime(t, "2028-01-01 00:00:00"), mustRoadmapTime(t, "2028-12-01 00:00:00"), "MONTH")
+	if got := sc.pos(mustRoadmapTime(t, "2028-02-29 00:00:00")); math.Abs(got-(1+28.0/29)) > 1e-9 {
+		t.Errorf("pos(2028-02-29) = %v, want %v", got, 1+28.0/29)
 	}
 }
