@@ -33,7 +33,7 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 | ページプロパティ（details） | 本文の表 + front matter の `[[properties]]` |
 | ページプロパティレポート（detailssummary） | `{{< page-properties-report >}}` ショートコード（条件はCQLから変換） |
 | 子ページ一覧（children） | `{{< children >}}` ショートコード（入れ子の箇条書き） |
-| ロードマッププランナー（roadmap） | SVG の図（変換時に生成） |
+| ロードマッププランナー（roadmap） | SVG の図（`roadmap-N.svg` を変換時に生成し、`{{< roadmap >}}` ショートコードで差し込む） |
 
 ## 動作要件
 

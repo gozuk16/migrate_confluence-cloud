@@ -32,6 +32,7 @@ type adfRenderer struct {
 	properties    []PageProperty    // details マクロから集めたページプロパティ（出現順）
 	seenProps     map[string]bool   // 収集済みの項目名
 	warnings      []string          // 変換時の警告（呼び出し側がログに出す）
+	files         []PageFile        // 本文と一緒にページのフォルダへ書き出すファイル（ロードマップの SVG など）
 }
 
 // adfResult はページ本文の変換結果
@@ -39,6 +40,13 @@ type adfResult struct {
 	Markdown   string
 	Properties []PageProperty
 	Warnings   []string
+	Files      []PageFile
+}
+
+// PageFile は本文と一緒にページのフォルダへ書き出すファイル
+type PageFile struct {
+	Name string
+	Data []byte
 }
 
 // convertADF は ADF JSON 文字列を Markdown に変換するエントリーポイント
@@ -58,7 +66,7 @@ func convertADFPage(adfJSON string, attachmentMap map[string]string) (adfResult,
 	}
 	r := &adfRenderer{attachmentMap: attachmentMap}
 	md := strings.TrimSpace(r.renderNode(root, ""))
-	return adfResult{Markdown: md, Properties: r.properties, Warnings: r.warnings}, nil
+	return adfResult{Markdown: md, Properties: r.properties, Warnings: r.warnings, Files: r.files}, nil
 }
 
 // renderNode はノードタイプに応じて変換を dispatch する

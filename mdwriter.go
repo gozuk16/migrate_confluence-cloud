@@ -35,7 +35,7 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	}
 
 	// Markdown本文の生成
-	content, err := w.generateContent(page, spaceKey, spaceTitle, parentTitle, labels, comments, attachments)
+	content, files, err := w.generateContent(page, spaceKey, spaceTitle, parentTitle, labels, comments, attachments)
 	if err != nil {
 		return fmt.Errorf("Markdownコンテンツ生成エラー: %w", err)
 	}
@@ -44,6 +44,19 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	mdPath := filepath.Join(pageDir, "index.md")
 	if err := os.WriteFile(mdPath, []byte(content), 0644); err != nil {
 		return fmt.Errorf("Markdownファイル書き出しエラー: %w", err)
+	}
+
+	// 本文と一緒に使うファイル（ロードマップの SVG）。前回の変換で残ったものは消してから書き出す
+	stale, _ := filepath.Glob(filepath.Join(pageDir, "roadmap-*.svg"))
+	for _, p := range stale {
+		if err := os.Remove(p); err != nil {
+			return fmt.Errorf("古いファイルの削除に失敗しました: %w", err)
+		}
+	}
+	for _, f := range files {
+		if err := os.WriteFile(filepath.Join(pageDir, f.Name), f.Data, 0644); err != nil {
+			return fmt.Errorf("ファイル書き出しエラー (%s): %w", f.Name, err)
+		}
 	}
 
 	return nil
@@ -164,7 +177,8 @@ func extractFrontMatter(data []byte) string {
 }
 
 // generateContent はMarkdownコンテンツ全体を生成する
-func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label, comments []Comment, attachments []Attachment) (string, error) {
+// 本文と一緒にページのフォルダへ書き出すファイルもあわせて返す
+func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle string, labels []Label, comments []Comment, attachments []Attachment) (string, []PageFile, error) {
 	var sb strings.Builder
 
 	// 本文を先に変換する（ページプロパティを front matter に書くため）
@@ -269,7 +283,7 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 		}
 	}
 
-	return sb.String(), nil
+	return sb.String(), res.Files, nil
 }
 
 // generateFrontMatter はHugo Front Matter (TOML形式) を生成する

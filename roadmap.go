@@ -66,7 +66,8 @@ const (
 
 var roadmapColorRe = regexp.MustCompile(`^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$`)
 
-// renderRoadmap は roadmap マクロを SVG にする。source を読めないときは警告を記録し、従来どおりのコメントを返す
+// renderRoadmap は roadmap マクロを SVG ファイル（ページ内の出現順に roadmap-1.svg, roadmap-2.svg…）にし、
+// 本文にはそれを読み込む roadmap ショートコードを出す。source を読めないときは警告を記録し、従来どおりのコメントを返す
 func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 	src, err := url.PathUnescape(macroParams(node)["source"])
 	if err == nil {
@@ -76,15 +77,28 @@ func (r *adfRenderer) renderRoadmap(node ADFNode) string {
 			for _, w := range warns {
 				r.warnings = append(r.warnings, "ロードマップ: "+w)
 			}
-			return svg
+			name := fmt.Sprintf("roadmap-%d.svg", countRoadmapFiles(r.files)+1)
+			r.files = append(r.files, PageFile{Name: name, Data: []byte(svg)})
+			return `{{< roadmap src="` + name + `" >}}`
 		}
 	}
 	r.warnings = append(r.warnings, "ロードマップ: マクロのデータを読めないため表示を省略しました: "+err.Error())
 	return "<!-- macro: roadmap -->"
 }
 
-// renderRoadmapSVG は source の JSON から、横スクロールする div で囲んだ SVG を作る。
-// Markdown の HTML ブロックが途切れないよう、出力は1行（空行なし）にする。
+// countRoadmapFiles は書き出し予定のロードマップ SVG の数を返す
+func countRoadmapFiles(files []PageFile) int {
+	n := 0
+	for _, f := range files {
+		if strings.HasPrefix(f.Name, "roadmap-") {
+			n++
+		}
+	}
+	return n
+}
+
+// renderRoadmapSVG は source の JSON から、単独のファイルとしても開ける SVG を作る。
+// テーマの roadmap ショートコードがビルド時に本文へ差し込むので、ページのフォントを引き継ぐ。
 // 描けない要素を省いた場合などは warns に理由を返す
 func renderRoadmapSVG(src string) (out string, warns []string, err error) {
 	var d roadmapData
@@ -146,7 +160,6 @@ func renderRoadmapSVG(src string) (out string, warns []string, err error) {
 		label = "ロードマップ"
 	}
 	var sb strings.Builder
-	sb.WriteString(`<div class="roadmap" style="overflow-x:auto;margin:1rem 0">`)
 	fmt.Fprintf(&sb, `<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" viewBox="0 0 %d %d" role="img" aria-label="%s" font-size="%d" style="display:block;max-width:none">`,
 		width, height, width, height, escapeSVG(label), rmFontSize)
 
@@ -231,7 +244,7 @@ func renderRoadmapSVG(src string) (out string, warns []string, err error) {
 		sb.WriteString(`</g>`)
 	}
 
-	sb.WriteString(`</svg></div>`)
+	sb.WriteString(`</svg>`)
 	if skipped > 0 {
 		warns = append(warns, fmt.Sprintf("日付を読めない、または行番号が %d 以上のバー・マーカー %d件を省きました", rmMaxRows, skipped))
 	}
@@ -378,8 +391,8 @@ func wrapRoadmapText(s string, maxW, fontSize float64, maxLines int) []string {
 }
 
 // escapeSVG は SVG（XML）の文字列・属性値用にエスケープする。
-// 出力を1行に保つため改行は文字参照にし（Markdown の HTML ブロックは空行で終わってしまう）、
-// XML で使えない制御文字は除き、Hugo のショートコードとして解釈されないよう "{{" も文字参照にする
+// 本文に差し込んだときに Markdown の空行や Hugo のショートコードとして解釈されないよう、
+// 改行と "{{" は文字参照にし、XML で使えない制御文字は除く
 func escapeSVG(s string) string {
 	s = strings.NewReplacer("\r\n", "\n", "\r", "\n").Replace(s)
 	s = strings.Map(func(r rune) rune {
