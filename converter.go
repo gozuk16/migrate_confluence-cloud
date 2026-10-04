@@ -205,7 +205,8 @@ func (c *Converter) Convert(xhtml string) (string, error) {
 	return strings.TrimSpace(result), nil
 }
 
-// ConvertADF は ADF JSON 文字列を Markdown に変換する（ページ本文用）
+// ConvertADF は ADF JSON 文字列を Markdown に変換する（ページ本文用）。
+// 本文と一緒に書き出すファイル（ロードマップの SVG など）は返さないので、ページの書き出しには ConvertADFPage を使う
 func (c *Converter) ConvertADF(adfJSON string, attachmentMap map[string]string) (string, error) {
 	return convertADF(adfJSON, attachmentMap)
 }
