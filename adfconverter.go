@@ -921,6 +921,8 @@ func (r *adfRenderer) renderExtension(node ADFNode) string {
 		return r.renderPropertiesReport(node)
 	case "children":
 		return r.renderChildren(node)
+	case "roadmap":
+		return r.renderRoadmap(node)
 	default:
 		return "<!-- macro: " + key + " -->"
 	}
