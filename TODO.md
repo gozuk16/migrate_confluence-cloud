@@ -6,12 +6,16 @@
 
 ## 未着手
 
-- [ ] 通常の画像（`renderMedia`）と添付ファイルセクションのリンク先も `markdownLinkDest` でエスケープする（空白・括弧・`#` を含むファイル名で壊れる）
-- [ ] 添付ファイルセクションで、箇条書きの直後の画像が前の項目に入ってしまう（空行が無い）表示崩れを直す
-- [ ] golangci-lint の既存の指摘 25 件（errcheck 16・staticcheck 9）を解消し `make lint` を通す
+- [ ] 添付画像の代替テキスト・ファイル名に `|` があると、テーブルセル内でセルが割れる（escapeLinkText・markdownLinkDest で `|` を扱う。PR #22 のレビューで判明、PR 前からの問題）
+- [ ] golangci-lint の既存の指摘 25 件（errcheck 16・staticcheck 9）を解消し `make lint` を通す（別の担当が別ブランチで対応）
 
 ## 完了
 
+- [x] 添付ファイルのリンクと表示の修正（ブランチ: fix/attachment-links）
+  - mdwriter.go: 添付ファイル欄を renderAttachmentSection に切り出し、画像を空行で区切って箇条書きに取り込まれないようにした
+  - renderMedia と添付ファイル欄のリンク先を sanitizeFilename + markdownLinkDest に、テキストを escapeLinkText に
+  - テスト追加（mdwriter_test.go・adfconverter_test.go）、make test 成功
+  - draw.io のページを再移行し、localhost:1313 で画像が独立した段落になり、リンク・画像 6 件が 200 で返ることを確認
 - [x] draw.io の図の移行（ブランチ: feature/drawio-macro）
   - 原因: draw.io は Forge マクロ（extensionKey 末尾 `/static/drawio`・`/static/drawio-sketch`）で未対応のためコメント化。添付ダウンロードは v2 API の相対パスに `/wiki` が抜けて 404
   - drawio.go: プレビュー画像 `<diagramName>.png` を埋め込み、元の図へリンク。プレビューが添付に無ければ警告してリンクのみ。段落内（inlineExtension）も対応

@@ -772,3 +772,80 @@ func TestMDWriter_RoadmapSVGKeepsAttachments(t *testing.T) {
 		t.Errorf("添付ファイルを消したり上書きしたりしないこと: %q, %v", data, err)
 	}
 }
+
+// TestRenderAttachmentSection は添付ファイル欄のテスト。
+// 画像は前後を空行で区切り、箇条書きの項目に取り込まれないようにする
+func TestRenderAttachmentSection(t *testing.T) {
+	tests := []struct {
+		name        string
+		attachments []Attachment
+		want        string
+	}{
+		{
+			name:        "添付が無ければ何も出さない",
+			attachments: nil,
+			want:        "",
+		},
+		{
+			name: "箇条書きの直後の画像は空行で区切る",
+			attachments: []Attachment{
+				{Title: "test1.drawio"},
+				{Title: "a.drawio.png"},
+				{Title: "test3"},
+				{Title: "doc.pdf"},
+				{Title: "b.png"},
+				{Title: "c.png"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"- [test1.drawio](test1.drawio)\n\n" +
+				"![a.drawio.png](a.drawio.png)\n\n" +
+				"- [test3](test3)\n- [doc.pdf](doc.pdf)\n\n" +
+				"![b.png](b.png)\n\n" +
+				"![c.png](c.png)\n",
+		},
+		{
+			name: "画像が先頭なら箇条書きの前を空行で区切る",
+			attachments: []Attachment{
+				{Title: "a.png"},
+				{Title: "b.pdf"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"![a.png](a.png)\n\n" +
+				"- [b.pdf](b.pdf)\n",
+		},
+		{
+			name: "画像以外だけなら 1 つの箇条書きにまとめる",
+			attachments: []Attachment{
+				{Title: "a.pdf"},
+				{Title: "b.zip"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"- [a.pdf](a.pdf)\n- [b.zip](b.zip)\n",
+		},
+		{
+			name: "空白・括弧・# を含むファイル名はリンク先をエンコードする",
+			attachments: []Attachment{
+				{Title: "my file (1).pdf"},
+				{Title: "図 #2.png"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"- [my file (1).pdf](my%20file%20%281%29.pdf)\n\n" +
+				"![図 #2.png](図%20%232.png)\n",
+		},
+		{
+			name: "リンク先は保存時のファイル名（サニタイズ後）、テキストは角括弧などをエスケープ",
+			attachments: []Attachment{
+				{Title: "a/b [draft].txt"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"- [a/b \\[draft\\].txt](a_b%20[draft].txt)\n",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderAttachmentSection(tt.attachments); got != tt.want {
+				t.Errorf("got %q\nwant %q", got, tt.want)
+			}
+		})
+	}
+}

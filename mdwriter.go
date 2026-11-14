@@ -223,16 +223,7 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 	}
 
 	// 添付ファイルセクション
-	if len(attachments) > 0 {
-		sb.WriteString("\n## 添付ファイル\n\n")
-		for _, att := range attachments {
-			if IsImageFile(att.Title) {
-				sb.WriteString(fmt.Sprintf("![%s](%s)\n\n", att.Title, att.Title))
-			} else {
-				sb.WriteString(fmt.Sprintf("- [%s](%s)\n", att.Title, att.Title))
-			}
-		}
-	}
+	sb.WriteString(renderAttachmentSection(attachments))
 
 	// コメントセクション
 	if len(comments) > 0 {
@@ -387,6 +378,35 @@ func formatDateForFrontMatter(dateStr string) string {
 		}
 	}
 	return t.UTC().Format(time.RFC3339)
+}
+
+// renderAttachmentSection は添付ファイル欄（見出しと一覧）を返す。添付が無ければ空文字を返す。
+// 画像以外は箇条書き、画像はその場に表示する。画像は前後を空行で区切り、
+// 直前の箇条書きの項目に取り込まれないようにする。
+// リンク先はダウンロード時の保存名（サニタイズ後）にし、空白・括弧・# などをエンコードする
+func renderAttachmentSection(attachments []Attachment) string {
+	if len(attachments) == 0 {
+		return ""
+	}
+	var blocks []string
+	inList := false
+	for _, att := range attachments {
+		text := escapeLinkText(att.Title)
+		dest := markdownLinkDest(sanitizeFilename(att.Title))
+		if IsImageFile(att.Title) {
+			blocks = append(blocks, "!["+text+"]("+dest+")")
+			inList = false
+			continue
+		}
+		item := "- [" + text + "](" + dest + ")"
+		if inList {
+			blocks[len(blocks)-1] += "\n" + item
+		} else {
+			blocks = append(blocks, item)
+		}
+		inList = true
+	}
+	return "\n## 添付ファイル\n\n" + strings.Join(blocks, "\n\n") + "\n"
 }
 
 // buildAttachmentMap は添付ファイル一覧から UUID → ファイル名マップを構築する。
