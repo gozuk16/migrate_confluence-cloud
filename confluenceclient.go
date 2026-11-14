@@ -341,7 +341,8 @@ func (cc *ConfluenceClient) GetPages(spaceID string) ([]Page, error) {
 
 // GetPageAttachments はページの添付ファイル一覧を取得する
 func (cc *ConfluenceClient) GetPageAttachments(pageID string) ([]Attachment, error) {
-	var allAttachments []Attachment
+	// 0 件でも nil ではなく空のスライスを返す（nil は「添付一覧が不明」を表す。buildAttachmentMap 参照）
+	allAttachments := []Attachment{}
 	cursor := ""
 
 	for {

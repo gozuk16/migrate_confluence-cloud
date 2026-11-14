@@ -34,6 +34,7 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 | ページプロパティレポート（detailssummary） | `{{< page-properties-report >}}` ショートコード（条件はCQLから変換） |
 | 子ページ一覧（children） | `{{< children >}}` ショートコード（入れ子の箇条書き） |
 | ロードマッププランナー（roadmap） | SVG の図（`confluence-roadmap-N.svg` を変換時に生成し、`{{< roadmap >}}` ショートコードで差し込む） |
+| draw.io の図・ボード（draw.io アプリ） | 添付のプレビュー画像 `<図の名前>.png` を表示し、元の図ファイルへリンクする（`--download-attachments` で添付を保存しておく） |
 
 ## 動作要件
 

@@ -237,6 +237,12 @@ func (r *adfRenderer) renderInline(node ADFNode) string {
 		return r.renderCard(node)
 	case "mediaInline":
 		return r.renderMediaInline(node)
+	case "inlineExtension":
+		// 段落内のマクロは従来どおり出力しない。draw.io の図だけは表示する
+		if isDrawioMacro(node) {
+			return r.renderDrawio(node)
+		}
+		return ""
 	default:
 		return ""
 	}
@@ -922,6 +928,9 @@ func extensionKey(node ADFNode) string {
 }
 
 func (r *adfRenderer) renderExtension(node ADFNode) string {
+	if isDrawioMacro(node) {
+		return r.renderDrawio(node)
+	}
 	switch key := extensionKey(node); key {
 	case "toc":
 		return "{{< toc >}}"
