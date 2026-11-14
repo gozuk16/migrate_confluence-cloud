@@ -52,3 +52,6 @@ hugo-site/.hugo_build.lock
 
 # Playwright MCP の出力先
 .playwright-mcp/
+
+# 移行ツールで実スペースから出力したコンテンツ（make sync-and-build で再生成する）
+hugo-site/content/SCRUM/
