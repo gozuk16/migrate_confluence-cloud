@@ -985,7 +985,7 @@ func TestMDWriter_DrawioDisabledByDefault(t *testing.T) {
 	}
 }
 
-// 添付ファイル欄では、draw.io の図ファイルとそのプレビュー画像は画像として表示せず、リンクとして並べる。
+// 添付ファイル欄では、draw.io の図ファイルはダウンロードのリンクにし、そのプレビュー画像は一覧に出さない。
 // draw.io と関係のない画像は、これまでどおり画像として表示する
 func TestRenderAttachmentSection_Drawio(t *testing.T) {
 	attachments := []Attachment{
@@ -1001,14 +1001,23 @@ func TestRenderAttachmentSection_Drawio(t *testing.T) {
 	}
 	want := "\n## 添付ファイル\n\n" +
 		`- <a href="test1.drawio" download>test1.drawio</a>` + "\n" +
-		"- [名称未設定.drawio.png](名称未設定.drawio.png)\n" +
 		`- <a href="test3" download="test3.drawio">test3</a>` + "\n" +
-		"- [test1.drawio.png](test1.drawio.png)\n" +
-		`- <a href="名称未設定.drawio" download>名称未設定.drawio</a>` + "\n" +
-		"- [test3.png](test3.png)\n\n" +
+		`- <a href="名称未設定.drawio" download>名称未設定.drawio</a>` + "\n\n" +
 		"![photo.png](photo.png)\n\n" +
 		"![other.drawio.png](other.drawio.png)\n"
 	if got := renderAttachmentSection(attachments); got != want {
 		t.Errorf("got  %q\nwant %q", got, want)
+
+	}
+
+	// 図ファイルが添付に無ければ、プレビューと同じ形の名前でも普通の画像として出す
+	onlyPreview := []Attachment{{Title: "a.drawio.png", MediaType: "image/png"}, {Title: "a.drawio", MediaType: drawioMediaType}}
+	if got := renderAttachmentSection(onlyPreview[:1]); got != "\n## 添付ファイル\n\n![a.drawio.png](a.drawio.png)\n" {
+		t.Errorf("図ファイルが無いプレビュー名の画像は普通の画像として出すこと: %q", got)
+	}
+	// 拡張子の無い図（ボード）のプレビューも一覧に出さない
+	hidden := []Attachment{{Title: "a.png", MediaType: "image/png"}, {Title: "a", MediaType: drawioMediaType}}
+	if got := renderAttachmentSection(hidden); got != "\n## 添付ファイル\n\n"+`- <a href="a" download="a.drawio">a</a>`+"\n" {
+		t.Errorf("got %q", got)
 	}
 }

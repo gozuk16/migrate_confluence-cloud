@@ -432,12 +432,12 @@ func formatDateForFrontMatter(dateStr string) string {
 // 直前の箇条書きの項目に取り込まれないようにする。
 // リンク先はダウンロード時の保存名（サニタイズ後）にし、空白・括弧・# などをエンコードする。
 // draw.io の図ファイルは、ブラウザで開くと XML の中身が表示されるだけなので、ダウンロードするリンクにする。
-// draw.io のプレビュー画像は、図を本文に表示しているので画像としては出さず、リンクとして並べる
+// draw.io のプレビュー画像は、図を本文に表示していて解像度も低いので、一覧に出さない（ファイルは保存したまま残す）
 func renderAttachmentSection(attachments []Attachment) string {
 	if len(attachments) == 0 {
 		return ""
 	}
-	// draw.io のプレビュー画像（<図ファイルの名前>.png）。図は本文に表示しているので、ここでは画像として出さない
+	// draw.io のプレビュー画像（<図ファイルの名前>.png）。図は本文に表示していて、解像度も低いので、一覧に出さない
 	drawioPreviews := map[string]bool{}
 	for _, att := range attachments {
 		if att.MediaType == drawioMediaType {
@@ -447,9 +447,12 @@ func renderAttachmentSection(attachments []Attachment) string {
 	var blocks []string
 	inList := false
 	for _, att := range attachments {
+		if drawioPreviews[att.Title] {
+			continue
+		}
 		text := escapeLinkText(att.Title)
 		dest := markdownLinkDest(sanitizeFilename(att.Title))
-		if IsImageFile(att.Title) && !drawioPreviews[att.Title] {
+		if IsImageFile(att.Title) {
 			blocks = append(blocks, "!["+text+"]("+dest+")")
 			inList = false
 			continue
@@ -464,6 +467,9 @@ func renderAttachmentSection(attachments []Attachment) string {
 			blocks = append(blocks, item)
 		}
 		inList = true
+	}
+	if len(blocks) == 0 {
+		return ""
 	}
 	return "\n## 添付ファイル\n\n" + strings.Join(blocks, "\n\n") + "\n"
 }
