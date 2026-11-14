@@ -984,3 +984,31 @@ func TestMDWriter_DrawioDisabledByDefault(t *testing.T) {
 		t.Error("SetDrawioExporter を呼ぶまで drawioSVGFunc は nil を返すこと")
 	}
 }
+
+// 添付ファイル欄では、draw.io の図ファイルとそのプレビュー画像は画像として表示せず、リンクとして並べる。
+// draw.io と関係のない画像は、これまでどおり画像として表示する
+func TestRenderAttachmentSection_Drawio(t *testing.T) {
+	attachments := []Attachment{
+		{Title: "test1.drawio", MediaType: drawioMediaType},
+		{Title: "名称未設定.drawio.png", MediaType: "image/png"},
+		{Title: "test3", MediaType: drawioMediaType},
+		{Title: "test1.drawio.png", MediaType: "image/png"},
+		{Title: "名称未設定.drawio", MediaType: drawioMediaType},
+		{Title: "test3.png", MediaType: "image/png"},
+		{Title: "photo.png", MediaType: "image/png"},
+		// 図ファイルが無い（名前が似ているだけの）画像は、普通の画像として表示する
+		{Title: "other.drawio.png", MediaType: "image/png"},
+	}
+	want := "\n## 添付ファイル\n\n" +
+		`- <a href="test1.drawio" download>test1.drawio</a>` + "\n" +
+		"- [名称未設定.drawio.png](名称未設定.drawio.png)\n" +
+		`- <a href="test3" download="test3.drawio">test3</a>` + "\n" +
+		"- [test1.drawio.png](test1.drawio.png)\n" +
+		`- <a href="名称未設定.drawio" download>名称未設定.drawio</a>` + "\n" +
+		"- [test3.png](test3.png)\n\n" +
+		"![photo.png](photo.png)\n\n" +
+		"![other.drawio.png](other.drawio.png)\n"
+	if got := renderAttachmentSection(attachments); got != want {
+		t.Errorf("got  %q\nwant %q", got, want)
+	}
+}

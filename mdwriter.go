@@ -431,17 +431,25 @@ func formatDateForFrontMatter(dateStr string) string {
 // 画像以外は箇条書き、画像はその場に表示する。画像は前後を空行で区切り、
 // 直前の箇条書きの項目に取り込まれないようにする。
 // リンク先はダウンロード時の保存名（サニタイズ後）にし、空白・括弧・# などをエンコードする。
-// draw.io の図ファイルは、ブラウザで開くと XML の中身が表示されるだけなので、ダウンロードするリンクにする
+// draw.io の図ファイルは、ブラウザで開くと XML の中身が表示されるだけなので、ダウンロードするリンクにする。
+// draw.io のプレビュー画像は、図を本文に表示しているので画像としては出さず、リンクとして並べる
 func renderAttachmentSection(attachments []Attachment) string {
 	if len(attachments) == 0 {
 		return ""
+	}
+	// draw.io のプレビュー画像（<図ファイルの名前>.png）。図は本文に表示しているので、ここでは画像として出さない
+	drawioPreviews := map[string]bool{}
+	for _, att := range attachments {
+		if att.MediaType == drawioMediaType {
+			drawioPreviews[att.Title+".png"] = true
+		}
 	}
 	var blocks []string
 	inList := false
 	for _, att := range attachments {
 		text := escapeLinkText(att.Title)
 		dest := markdownLinkDest(sanitizeFilename(att.Title))
-		if IsImageFile(att.Title) {
+		if IsImageFile(att.Title) && !drawioPreviews[att.Title] {
 			blocks = append(blocks, "!["+text+"]("+dest+")")
 			inList = false
 			continue

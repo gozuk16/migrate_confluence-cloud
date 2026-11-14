@@ -18,6 +18,7 @@
   - コマンドが無い・図ファイルが無い・変換に失敗したときは、警告を出して従来の PNG 表示に戻す。`[drawio] cli_path` を設定に追加
   - テーマ: drawio ショートコード、「拡大表示」ボタン（assets/js/drawio.js）、draw.io ビューア v26.2.2 を static/vendor/drawio に同梱。ボタンを押したときだけ読み込み、図のデータは外部に送らない（図形定義・数式スクリプトは viewer.diagrams.net から取得を許可）
   - 添付ファイル欄の draw.io の図ファイルは download 属性付きのリンクにした
+  - 追加修正: 添付ファイル欄で draw.io のプレビュー画像を画像ではなくリンクにした。拡大表示を開けない理由をコンソールに出すようにした（404 のときの文言は実機では未確認）
   - テスト追加（drawioexport_test.go・drawio_test.go・mdwriter_test.go）、make test 成功、make lint 0 件。サブエージェントでコードレビューし指摘を反映（打ち切り時の待ち時間、JS のエラー処理、同じ図の使い回し、スクリプトを含む SVG の拒否）
   - draw.io のページを再移行し、新しく起動した hugo server（1314）とヘッドレス Chrome で確認: SVG の直接埋め込み 3 つ、図を包むリンクなし、文字を選択できる、ボタンで拡大表示が開いて Esc で閉じる、添付ファイル欄にダウンロードのリンク。1313 のサーバーは起動後にできたテーマの static/ を認識しないため、再起動が必要
 - [x] golangci-lint の既存の指摘を解消し `make lint` を通す（ブランチ: fix/lint-errors、PR #23）
