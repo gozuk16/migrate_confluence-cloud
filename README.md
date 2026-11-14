@@ -160,7 +160,7 @@ migConfluence page --page-id <ページID> [オプション]
 | `--page-id` | `--id` | 取得するページのID（必須） |
 | `--recursive` | `-r` | 子ページを再帰的に取得する |
 | `--save-intermediate` | — | 中間ファイルを保存する |
-| `--download-attachments` | — | 添付ファイルをダウンロードする |
+| `--download-attachments` | — | 添付ファイルをダウンロードする。保存済みのファイルは、Confluence 側で更新されたものだけ取り直す |
 
 **使用例**
 
@@ -193,7 +193,7 @@ migConfluence space [--space-key <スペースキー>] [オプション]
 |---|---|---|
 | `--space-key` | `-k` | 取得するスペースのキー（省略時は設定ファイルの `default_space_key` を使用） |
 | `--save-intermediate` | — | 中間ファイルを保存する |
-| `--download-attachments` | — | 添付ファイルをダウンロードする |
+| `--download-attachments` | — | 添付ファイルをダウンロードする。保存済みのファイルは、Confluence 側で更新されたものだけ取り直す |
 
 **使用例**
 

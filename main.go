@@ -243,7 +243,9 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 		attachmentsDir := getAttachmentsDir(cfg, space.Key, page.Title)
 		downloadedFiles, err := downloader.DownloadAttachments(cfg.Confluence.URL, attachments, attachmentsDir)
 		if err != nil {
-			slog.Warn("添付ファイルダウンロードエラー", "pageID", pageID, "error", err)
+			// 失敗した添付は、保存済みのファイルがあればそれを使って変換を続ける
+			slog.Warn("添付ファイルダウンロードエラー（失敗した添付は、保存済みの古いファイルがあればそれで変換を続けます）",
+				"pageID", pageID, "succeeded", len(downloadedFiles), "error", err)
 		} else {
 			slog.Info("添付ファイルダウンロード完了", "count", len(downloadedFiles))
 		}
