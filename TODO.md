@@ -6,12 +6,20 @@
 
 ## 未着手
 
-- [ ] draw.io の図の中の文字は検索（Pagefind）の対象にならない（Pagefind が `<svg>` の中身を索引に入れないため。代替文言「Text is not SVG - cannot display」も拾われないことは確認済み）。図の文字でも検索したい場合は、図の文字を索引用に別の要素で出すなどの対応を検討する
 - [ ] draw.io の複数ページの図は 1 ページ目だけを埋め込んでいる。マクロがページを指定している場合の対応を検討する
 - [ ] 添付画像の代替テキスト・ファイル名に `|` があると、テーブルセル内でセルが割れる（escapeLinkText・markdownLinkDest で `|` を扱う。PR #22 のレビューで判明、PR 前からの問題）
 
 ## 完了
 
+- [x] draw.io の図形ライブラリのアイコンを本文の図に表示する（ブランチ: fix/drawio-embed-images）
+  - 原因: draw.io のコマンドが書き出す SVG の `<image>` が、アプリの中のファイル（`file:///Applications/draw.io.app/…/app.asar/…/img/lib/…`）を指していて、ブラウザで読めなかった（2026-11-14、2 つ目の図の Azure のアイコンで確認）
+  - ExportSVG に `--embed-svg-images` を付けて、画像を data URI で埋め込む。外部 URL の画像も取得できれば埋め込まれ、取得できなければ URL のまま残る。図に貼った画像はもともと図ファイルの中に埋め込まれている
+  - SVG に `file://` を指す画像が残っていたら、変換ログに警告を出す（SVG は使う）
+  - 拡大表示（ビューア）は、アイコンを `app.diagrams.net` から読み込んで表示する（既知の制限として CHANGELOG・README に記載）
+  - テスト追加（drawioexport_test.go・drawio_test.go）、make test 成功、make lint 0 件
+  - サブエージェントでコードレビューし、指摘を反映（応答の返らない URL の画像があると変換が 60 秒で打ち切られて図全体が PNG に戻るため、画像を埋め込まずにやり直す。警告の原因の書き方。移行時に画像の URL へ接続することを README に記載）
+  - draw.io のページを再移行し、localhost:1313 で 2 つ目の図に Azure のアイコンが表示されることをヘッドレス Chrome の画面で確認（confluence-drawio-2.svg は 2,912 → 6,082 バイト）
+- [x] draw.io の図の中の文字を検索（Pagefind）の対象にするかの検討 → 対応しない（2026-11-14 にユーザーが「検索できなくてよい」と判断。既知の制限として CHANGELOG に記載済み）
 - [x] Confluence で更新された添付ファイルを再移行で取り直す（ブランチ: fix/attachment-redownload）
   - 原因: downloader.go の downloadFile が、同名のファイルがあると中身を確かめずにダウンロードを飛ばしていた（2026-11-14、編集した draw.io の図が古いまま SVG になっているのを確認）
   - 設計: 保存したファイルの更新日時を Confluence の版の作成日時（version.createdAt）に合わせ、次回は更新日時（2 秒以内の違いは同じ）とサイズ（fileSize）を比べて、違えば取り直す。記録用のファイルは作らない（保存先が Hugo のページのフォルダで、置くと公開されるため）。修正前に保存したファイルは最初の移行で一度だけ取り直す

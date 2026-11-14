@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -74,6 +76,10 @@ func findDrawioCLI(configured string, lookPath func(string) (string, error), def
 // ExportSVG は図ファイルの 1 ページ目を SVG に変換する。
 // 明るい配色に固定し（--svg-theme light。既定の auto は OS のダークモードで線と文字が白くなる）、
 // フォントは埋め込まない（--embed-svg-fonts false。文字をそのまま残し、外部のフォントも取りに行かない）。
+// 画像は SVG の中に埋め込む（--embed-svg-images）。付けないと、図形ライブラリのアイコン（Azure・AWS など）が
+// draw.io のアプリの中のファイル（file:///…/app.asar/…）を指したままになり、ブラウザで表示できない。
+// 外部 URL の画像も取得して埋め込むが、取得できなかったものは URL のまま残る。
+// 時間内に終わらなければ（応答の返らない URL の画像があるときなど）、画像を埋め込まずに 1 回だけやり直す
 // 添付ファイルは拡張子が無いことや、コマンドの引数として扱いにくい名前のことがあるので、一時フォルダに写してから変換する
 func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 	tmpDir, err := os.MkdirTemp("", "drawio-export-")
@@ -88,9 +94,39 @@ func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 		return nil, fmt.Errorf("図ファイルを読めません: %w", err)
 	}
 
+	err = c.run(in, out, true)
+	if errors.Is(err, errDrawioTimeout) {
+		// 応答の返らない URL の画像があると、draw.io が画像の取得を待ち続けて終わらない。
+		// 図そのものは表示できるように、画像を埋め込まずにやり直す
+		slog.Warn("draw.io の変換が時間内に終わらないため、画像を埋め込まずにやり直します（図の中の画像の URL に届かない可能性があります）",
+			"file", srcPath, "timeout", c.timeout)
+		err = c.run(in, out, false)
+	}
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(out)
+	if err != nil {
+		return nil, errors.New("draw.io が SVG を出力しませんでした")
+	}
+	return inlineSVG(data)
+}
+
+// errDrawioTimeout は draw.io の変換が時間内に終わらなかったことを表す
+var errDrawioTimeout = errors.New("draw.io の変換が時間内に終わりませんでした")
+
+// run は draw.io のコマンドで in を SVG にして out に書き出す。embedImages が true なら画像を SVG の中に埋め込む。
+// timeout で打ち切ったときは errDrawioTimeout を包んだエラーを返す
+func (c *DrawioCLI) run(in, out string, embedImages bool) error {
+	args := []string{"-x", "-f", "svg", "--svg-theme", "light", "--embed-svg-fonts", "false"}
+	if embedImages {
+		args = append(args, "--embed-svg-images")
+	}
+	args = append(args, "-o", out, in)
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.path, "-x", "-f", "svg", "--svg-theme", "light", "--embed-svg-fonts", "false", "-o", out, in)
+	cmd := exec.CommandContext(ctx, c.path, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	// draw.io は Electron で、打ち切ったあとも補助プロセスがエラー出力を握ったまま残ることがある。
@@ -98,15 +134,14 @@ func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 	cmd.WaitDelay = c.waitDelay
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return nil, fmt.Errorf("draw.io の変換が %s で終わりませんでした", c.timeout)
+			return fmt.Errorf("%w（%s）", errDrawioTimeout, c.timeout)
 		}
-		return nil, fmt.Errorf("draw.io の変換に失敗しました: %w: %s", err, lastLine(stderr.String()))
+		return fmt.Errorf("draw.io の変換に失敗しました: %w: %s", err, lastLine(stderr.String()))
 	}
-	data, err := os.ReadFile(out)
-	if err != nil {
-		return nil, fmt.Errorf("draw.io が SVG を出力しませんでした: %s", lastLine(stderr.String()))
+	if _, err := os.Stat(out); err != nil {
+		return fmt.Errorf("draw.io が SVG を出力しませんでした: %s", lastLine(stderr.String()))
 	}
-	return inlineSVG(data)
+	return nil
 }
 
 // inlineSVG は SVG ファイルの内容から、HTML に直接埋め込める <svg>…</svg> の部分だけを取り出す
@@ -128,6 +163,17 @@ func inlineSVG(data []byte) ([]byte, error) {
 		}
 	}
 	return svg, nil
+}
+
+// localFileRefPattern は、SVG の属性（href・xlink:href・src）の値が file: で始まる箇所。
+// 警告を出すためのものなので、draw.io が書き出す形だけを拾う（CSS の url(…) や文字参照で書かれたものは拾わない）
+var localFileRefPattern = regexp.MustCompile(`(?i)(?:href|src)\s*=\s*["']\s*file:`)
+
+// countLocalFileRefs は、SVG の中の、ローカルのファイル（file://）への参照の数を返す。
+// ブラウザはサイトのページから file:// を読めないので、残っていればその画像は表示されない
+// （--embed-svg-images が効かない古い draw.io、draw.io に無い図形ライブラリの画像、埋め込まずにやり直した図で起こりうる）
+func countLocalFileRefs(svg []byte) int {
+	return len(localFileRefPattern.FindAll(svg, -1))
 }
 
 // copyFile は src を dst に写す
