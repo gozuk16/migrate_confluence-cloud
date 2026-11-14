@@ -121,3 +121,10 @@
   - [x] PR作成（親リポジトリ。submodule ポインタのずれも解消）
   - [x] SVG を別ファイル（`confluence-roadmap-N.svg`）に書き出し、テーマの `roadmap` ショートコード（gozuk16/hugo-theme-docs#9）でビルド時に本文へ差し込む方式に変更（ユーザー承認済み。`<img>` で読み込む方式はツールチップ・フォント・本文検索が失われるため不採用）
   - [x] 別ファイル化のレビュー指摘を修正: 生成名を `confluence-roadmap-N.svg` にし、古いファイルの掃除で添付ファイルを消さないようにした。SVG → 本文 → 掃除の順に書き出し、src が空のときもビルドログに警告
+- [x] main の作業ツリーに残った未コミット変更の整理
+  - [x] 調査: テーマのサブモジュールが 10ee446（gozuk16/hugo-theme-docs#9 のブランチ先頭）から d0a2134（同 PR のテーマ main へのマージコミット、ファイル内容は同一）に進んでいた。サブモジュール内に未コミットの変更なし
+  - [x] 調査: `hugo-site/content/SCRUM/` は移行ツールで実スペース（SCRUM）から出力したコンテンツ。`make sync-and-build` で再生成でき、出力元の `output/` も追跡対象外。コミット済みの `sample/` は検証用フィクスチャ
+  - [x] 調査: `docs/confluence-storage-format-reference.md` は変換器を作るための Storage Format の調査資料（2026-02-25 調査）。実データや認証情報は含まない
+  - [x] サブモジュールのポインタをテーマ main（d0a2134）に更新してコミット
+  - [x] Storage Format リファレンスをコミット
+  - [x] `hugo-site/content/SCRUM/` を .gitignore に追加
