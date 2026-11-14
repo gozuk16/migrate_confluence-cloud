@@ -804,6 +804,25 @@ func TestRenderAttachmentSection(t *testing.T) {
 				"![c.png](c.png)\n",
 		},
 		{
+			name: "画像が先頭なら箇条書きの前を空行で区切る",
+			attachments: []Attachment{
+				{Title: "a.png"},
+				{Title: "b.pdf"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"![a.png](a.png)\n\n" +
+				"- [b.pdf](b.pdf)\n",
+		},
+		{
+			name: "画像以外だけなら 1 つの箇条書きにまとめる",
+			attachments: []Attachment{
+				{Title: "a.pdf"},
+				{Title: "b.zip"},
+			},
+			want: "\n## 添付ファイル\n\n" +
+				"- [a.pdf](a.pdf)\n- [b.zip](b.zip)\n",
+		},
+		{
 			name: "空白・括弧・# を含むファイル名はリンク先をエンコードする",
 			attachments: []Attachment{
 				{Title: "my file (1).pdf"},

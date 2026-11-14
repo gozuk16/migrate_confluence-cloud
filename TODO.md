@@ -6,6 +6,7 @@
 
 ## 未着手
 
+- [ ] 添付画像の代替テキスト・ファイル名に `|` があると、テーブルセル内でセルが割れる（escapeLinkText・markdownLinkDest で `|` を扱う。PR #22 のレビューで判明、PR 前からの問題）
 - [ ] golangci-lint の既存の指摘 25 件（errcheck 16・staticcheck 9）を解消し `make lint` を通す（別の担当が別ブランチで対応）
 
 ## 完了

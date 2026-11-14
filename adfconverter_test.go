@@ -592,6 +592,18 @@ func TestConvertADF_MediaExternalImage(t *testing.T) {
 	}
 }
 
+// 外部画像の代替テキストも角括弧・強調記号をエスケープする（URL はそのまま）
+func TestConvertADF_MediaExternalAltEscaped(t *testing.T) {
+	adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"external","url":"https://example.com/a_b.png","alt":"Screen_Shot [1]"}}]}`)
+	got, err := convertADF(adf, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := `![Screen\_Shot \[1\]](https://example.com/a_b.png)`; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func TestConvertADF_MediaFileWithMap(t *testing.T) {
 	attachmentMap := map[string]string{"uuid-123": "photo.png"}
 	adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"file","id":"uuid-123","alt":"photo"}}]}`)
