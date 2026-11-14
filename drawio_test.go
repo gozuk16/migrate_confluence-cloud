@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -158,5 +159,160 @@ func TestBuildAttachmentMap_NilAndEmpty(t *testing.T) {
 	}
 	if m := buildAttachmentMap([]Attachment{}); m == nil || len(m) != 0 {
 		t.Errorf("buildAttachmentMap(空) = %v, want 空の map（非 nil）", m)
+	}
+}
+
+// SVG にできた図は、SVG を書き出して drawio ショートコードにする（リンクで包まない）
+func TestConvertADFPage_DrawioSVG(t *testing.T) {
+	var asked []string
+	opts := adfOptions{
+		attachmentMap: map[string]string{"a1": "test1.drawio", "a2": "test1.drawio.png", "a3": "a/b \"x\""},
+		drawioSVG: func(name string) ([]byte, error) {
+			asked = append(asked, name)
+			return []byte("<svg>" + name + "</svg>"), nil
+		},
+	}
+	adf := adfDoc(drawioExtension("drawio", `{"diagramName":"test1.drawio","diagramDisplayName":"構成図","simple":true,"lbox":true}`) + "," +
+		drawioExtension("drawio-sketch", `{"diagramName":"a/b \"x\""}`))
+	res, err := convertADFPageWith(adf, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := `{{< drawio src="confluence-drawio-1.svg" file="test1.drawio" title="構成図" >}}` + "\n\n" +
+		`{{< drawio src="confluence-drawio-2.svg" file="a_b \"x\"" title="a/b \"x\"" >}}`
+	if res.Markdown != want {
+		t.Errorf("got  %q\nwant %q", res.Markdown, want)
+	}
+	if len(res.Warnings) != 0 {
+		t.Errorf("warnings = %q, want none", res.Warnings)
+	}
+	if len(asked) != 2 || asked[0] != "test1.drawio" || asked[1] != `a/b "x"` {
+		t.Errorf("SVG にする図の名前 = %q", asked)
+	}
+	if len(res.Files) != 2 || res.Files[0].Name != "confluence-drawio-1.svg" || string(res.Files[0].Data) != "<svg>test1.drawio</svg>" ||
+		res.Files[1].Name != "confluence-drawio-2.svg" {
+		t.Errorf("files = %+v", res.Files)
+	}
+}
+
+// SVG にできない図は、警告を出して PNG の表示に戻す。ほかの図の番号は詰める
+func TestConvertADFPage_DrawioSVGFallback(t *testing.T) {
+	opts := adfOptions{
+		attachmentMap: map[string]string{"a1": "ng.drawio", "a2": "ng.drawio.png", "a3": "ok.drawio"},
+		drawioSVG: func(name string) ([]byte, error) {
+			if name == "ng.drawio" {
+				return nil, errors.New("変換に失敗")
+			}
+			return []byte("<svg/>"), nil
+		},
+	}
+	adf := adfDoc(drawioExtension("drawio", `{"diagramName":"ng.drawio"}`) + "," + drawioExtension("drawio", `{"diagramName":"ok.drawio"}`))
+	res, err := convertADFPageWith(adf, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := "[![ng.drawio](ng.drawio.png)](ng.drawio)\n\n" + `{{< drawio src="confluence-drawio-1.svg" file="ok.drawio" title="ok.drawio" >}}`
+	if res.Markdown != want {
+		t.Errorf("got  %q\nwant %q", res.Markdown, want)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "ng.drawio を SVG にできないため PNG で表示します: 変換に失敗") {
+		t.Errorf("warnings = %q", res.Warnings)
+	}
+	if len(res.Files) != 1 || res.Files[0].Name != "confluence-drawio-1.svg" {
+		t.Errorf("files = %+v", res.Files)
+	}
+}
+
+func TestDrawioDownloadLink(t *testing.T) {
+	tests := []struct {
+		title string
+		want  string
+	}{
+		{"test1.drawio", `<a href="test1.drawio" download>test1.drawio</a>`},
+		{"Test.DRAWIO", `<a href="Test.DRAWIO" download>Test.DRAWIO</a>`},
+		// 拡張子が無い図は .drawio を付けた名前で保存させる
+		{"test3", `<a href="test3" download="test3.drawio">test3</a>`},
+		{`a/b <1> "x" #2`, `<a href="a_b%20%3C1%3E%20%22x%22%20%232" download="a_b &lt;1&gt; &#34;x&#34; #2.drawio">a/b &lt;1&gt; &#34;x&#34; #2</a>`},
+	}
+	for _, tt := range tests {
+		if got := drawioDownloadLink(tt.title); got != tt.want {
+			t.Errorf("drawioDownloadLink(%q)\n got  %s\n want %s", tt.title, got, tt.want)
+		}
+	}
+}
+
+// 同じ図を何度も埋め込んでいても、変換と警告は 1 回だけで、同じ SVG を使う
+func TestConvertADFPage_DrawioSVGSameDiagramTwice(t *testing.T) {
+	calls := map[string]int{}
+	opts := adfOptions{drawioSVG: func(name string) ([]byte, error) {
+		calls[name]++
+		if name == "ng.drawio" {
+			return nil, errors.New("失敗")
+		}
+		return []byte("<svg/>"), nil
+	}}
+	ok := drawioExtension("drawio", `{"diagramName":"ok.drawio"}`)
+	ng := drawioExtension("drawio", `{"diagramName":"ng.drawio"}`)
+	other := drawioExtension("drawio", `{"diagramName":"other.drawio"}`)
+	res, err := convertADFPageWith(adfDoc(ok+","+ng+","+ok+","+ng+","+other), opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	okSC := `{{< drawio src="confluence-drawio-1.svg" file="ok.drawio" title="ok.drawio" >}}`
+	ngMD := "[![ng.drawio](ng.drawio.png)](ng.drawio)"
+	want := okSC + "\n\n" + ngMD + "\n\n" + okSC + "\n\n" + ngMD + "\n\n" +
+		`{{< drawio src="confluence-drawio-2.svg" file="other.drawio" title="other.drawio" >}}`
+	if res.Markdown != want {
+		t.Errorf("got  %q\nwant %q", res.Markdown, want)
+	}
+	if calls["ok.drawio"] != 1 || calls["ng.drawio"] != 1 || len(res.Files) != 2 || len(res.Warnings) != 1 {
+		t.Errorf("calls = %v, files = %d, warnings = %q", calls, len(res.Files), res.Warnings)
+	}
+}
+
+// draw.io の編集中の下書き（~ で始まり .tmp で終わる mxfile）だけを添付一覧から外す
+func TestExcludeDrawioDrafts(t *testing.T) {
+	keep := []Attachment{
+		{Title: "test1.drawio", MediaType: drawioMediaType},
+		{Title: "test3", MediaType: drawioMediaType},
+		{Title: "test1.drawio.png", MediaType: "image/png"},
+		// 名前が下書きの形でも、図ファイルでなければ普通の添付として残す
+		{Title: "~メモ.drawio.tmp", MediaType: "text/plain"},
+		{Title: "~backup.tmp", MediaType: "application/octet-stream"},
+		// 図ファイルでも、~ で始まるだけ・.tmp で終わるだけのものは残す
+		{Title: "~案.drawio", MediaType: drawioMediaType},
+		{Title: "構成図.drawio.tmp", MediaType: drawioMediaType},
+		{Title: "a~b.drawio.tmp", MediaType: drawioMediaType},
+	}
+	drafts := []Attachment{
+		{Title: "~名称未設定ファイル-1794638497741.drawio.tmp", MediaType: drawioMediaType},
+		{Title: "~drawio~557058:6eed56ba~test1.drawio.tmp", MediaType: drawioMediaType},
+		// 拡張子の無い図（ボード）の下書き
+		{Title: "~test3.tmp", MediaType: drawioMediaType},
+		{Title: "~Test.DRAWIO.TMP", MediaType: drawioMediaType},
+	}
+	for _, a := range keep {
+		if isDrawioDraft(a) {
+			t.Errorf("%q（%s）は下書きとして扱わないこと", a.Title, a.MediaType)
+		}
+	}
+	for _, a := range drafts {
+		if !isDrawioDraft(a) {
+			t.Errorf("%q（%s）は下書きとして扱うこと", a.Title, a.MediaType)
+		}
+	}
+
+	// 順序を保って下書きだけを外す
+	mixed := []Attachment{keep[0], drafts[0], keep[1], drafts[1], keep[2]}
+	got := excludeDrawioDrafts(mixed)
+	if len(got) != 3 || got[0].Title != "test1.drawio" || got[1].Title != "test3" || got[2].Title != "test1.drawio.png" {
+		t.Errorf("got %+v", got)
+	}
+	// 添付一覧が不明（nil）なら nil のまま、全部が下書きでも空のスライス（非 nil）を返す（buildAttachmentMap 参照）
+	if got := excludeDrawioDrafts(nil); got != nil {
+		t.Errorf("excludeDrawioDrafts(nil) = %v, want nil", got)
+	}
+	if got := excludeDrawioDrafts(drafts[:1]); got == nil || len(got) != 0 {
+		t.Errorf("got %#v, want 空のスライス（非 nil）", got)
 	}
 }

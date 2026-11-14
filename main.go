@@ -150,6 +150,7 @@ func fetchPage(ctx context.Context, cmd *cli.Command) error {
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv, func(accountID string) string {
 		return client.GetUserDisplayName(accountID, cfg.DeletedUsers)
 	})
+	setupDrawio(writer, cfg)
 
 	var intermediateSaver *IntermediateSaver
 	if saveIntermediate {
@@ -213,6 +214,8 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 		// 空のスライスにすると「添付 0 件」と扱われ、draw.io の図がリンクだけになってしまう
 		attachments = nil
 	}
+	// draw.io の編集中の下書きは、ダウンロードも添付ファイル欄への表示もしない
+	attachments = excludeDrawioDrafts(attachments)
 
 	// 親ページのタイトルを取得
 	parentTitle := ""
@@ -293,6 +296,7 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	writer := NewMDWriter(cfg.Output.MarkdownDir, conv, func(accountID string) string {
 		return client.GetUserDisplayName(accountID, cfg.DeletedUsers)
 	})
+	setupDrawio(writer, cfg)
 
 	var intermediateSaver *IntermediateSaver
 	if saveIntermediate {
@@ -368,6 +372,7 @@ func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 		}
 		return accountID
 	})
+	setupDrawio(writer, cfg)
 
 	// 中間ファイルディレクトリを走査
 	intermediateDir := cfg.Output.IntermediateDir
@@ -430,6 +435,17 @@ func convertFromIntermediate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return nil
+}
+
+// setupDrawio は draw.io の図を SVG にして埋め込むように writer を設定する。
+// draw.io デスクトップ版のコマンドが見つからなくても移行は続け、図は警告つきで PNG の表示に戻る
+func setupDrawio(writer *MDWriter, cfg *Config) {
+	cli, err := NewDrawioCLI(cfg.Drawio.CLIPath)
+	if err != nil {
+		writer.SetDrawioExporter(nil, err, cfg.Output.AttachmentsDir)
+		return
+	}
+	writer.SetDrawioExporter(cli, nil, cfg.Output.AttachmentsDir)
 }
 
 // getAttachmentsDir は添付ファイルの保存先ディレクトリを返す

@@ -223,6 +223,11 @@ func (c *Converter) ConvertADFPage(adfJSON string, attachmentMap map[string]stri
 	return convertADFPage(adfJSON, attachmentMap)
 }
 
+// ConvertADFPageWith は ConvertADFPage に加えて、ページごとの情報（draw.io の図を SVG にする関数など）を受け取る
+func (c *Converter) ConvertADFPageWith(adfJSON string, opts adfOptions) (adfResult, error) {
+	return convertADFPageWith(adfJSON, opts)
+}
+
 // preprocess はConfluence固有要素を標準HTMLに変換する
 func (c *Converter) preprocess(xhtml string) (string, error) {
 	wrapped := "<html><body>" + xhtml + "</body></html>"

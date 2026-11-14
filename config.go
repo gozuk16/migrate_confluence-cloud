@@ -13,6 +13,7 @@ type Config struct {
 	Output       OutputConfig      `toml:"output"`
 	Search       SearchConfig      `toml:"search"`
 	Display      DisplayConfig     `toml:"display"`
+	Drawio       DrawioConfig      `toml:"drawio"`
 	DeletedUsers map[string]string `toml:"deletedUsers"` // 削除済みユーザーのマッピング（accountId -> displayName）
 }
 
@@ -38,6 +39,11 @@ type SearchConfig struct {
 // DisplayConfig は表示設定を表す構造体
 type DisplayConfig struct {
 	IgnoredMacros []string `toml:"ignored_macros"` // 無視するマクロ名のリスト
+}
+
+// DrawioConfig は draw.io の図の変換設定を表す構造体
+type DrawioConfig struct {
+	CLIPath string `toml:"cli_path"` // draw.io デスクトップ版のコマンドのパス（空の場合は PATH と既定のインストール先から探す）
 }
 
 // LoadConfig は指定されたパスからTOML設定ファイルを読み込む
