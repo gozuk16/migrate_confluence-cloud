@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -76,7 +77,11 @@ func (d *Downloader) downloadFile(baseURL string, attachment Attachment, targetD
 	if err != nil {
 		return "", fmt.Errorf("HTTPリクエストに失敗しました: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Warn("レスポンスボディのクローズに失敗しました", "file", safeFilename, "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("ダウンロードに失敗しました。ステータスコード: %d", resp.StatusCode)
@@ -87,7 +92,12 @@ func (d *Downloader) downloadFile(baseURL string, attachment Attachment, targetD
 	if err != nil {
 		return "", fmt.Errorf("ファイルの作成に失敗しました: %w", err)
 	}
-	defer outFile.Close()
+	// Close の失敗はログに出すだけで、戻り値は変えない（従来どおりダウンロード成功として扱う）
+	defer func() {
+		if cerr := outFile.Close(); cerr != nil {
+			slog.Warn("添付ファイルのクローズに失敗しました", "path", destPath, "error", cerr)
+		}
+	}()
 
 	if _, err := io.Copy(outFile, resp.Body); err != nil {
 		return "", fmt.Errorf("ファイルの書き込みに失敗しました: %w", err)

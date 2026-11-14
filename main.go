@@ -28,7 +28,13 @@ func main() {
 		if err != nil {
 			log.Printf("警告: ログファイルの作成に失敗しました: %v\n", err)
 		} else {
-			defer logFile.Close()
+			// 終了直前のクローズなので、失敗は標準エラーに出すだけにする
+			// （slog.SetDefault 後は log も debug.log に書くため、クローズ済みのファイルを避けて os.Stderr に直接書く）
+			defer func() {
+				if cerr := logFile.Close(); cerr != nil {
+					fmt.Fprintf(os.Stderr, "警告: ログファイルのクローズに失敗しました: %v\n", cerr)
+				}
+			}()
 			logWriter = io.MultiWriter(os.Stderr, logFile)
 		}
 	}
@@ -242,7 +248,7 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 
 	// Markdown生成
 	if err := writer.WritePage(page, space.Key, space.Name, parentTitle, labels, comments, attachments); err != nil {
-		return fmt.Errorf("Markdown生成エラー: %w", err)
+		return fmt.Errorf("markdown生成エラー: %w", err)
 	}
 
 	fmt.Printf("変換完了: %s/%s (%s)\n", space.Key, page.Title, pageID)

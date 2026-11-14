@@ -7,10 +7,15 @@
 ## 未着手
 
 - [ ] 添付画像の代替テキスト・ファイル名に `|` があると、テーブルセル内でセルが割れる（escapeLinkText・markdownLinkDest で `|` を扱う。PR #22 のレビューで判明、PR 前からの問題）
-- [ ] golangci-lint の既存の指摘 25 件（errcheck 16・staticcheck 9）を解消し `make lint` を通す（別の担当が別ブランチで対応）
 
 ## 完了
 
+- [x] golangci-lint の既存の指摘を解消し `make lint` を通す（ブランチ: fix/lint-errors、PR #23）
+  - 表示されていた 25 件（errcheck 16・staticcheck 9）のほか、同じ種類の指摘の表示上限（3 件）で隠れていた分も含め、全 65 件を解消
+  - errcheck: Close・Write の失敗は slog.Warn でログに出す（戻り値は変えない）。テストはエラーを確認する
+  - staticcheck: fmt.Fprintf への置き換え、空の if の削除、tagged switch 化、エラーメッセージの文言調整
+  - lint の設定は変えず、//nolint・`_ =` は使っていない。make test・make lint 成功
+  - サブエージェントでコードレビューし、指摘（不正な演算子のエラーを errors.New に）を反映
 - [x] 添付ファイルのリンクと表示の修正（ブランチ: fix/attachment-links）
   - mdwriter.go: 添付ファイル欄を renderAttachmentSection に切り出し、画像を空行で区切って箇条書きに取り込まれないようにした
   - renderMedia と添付ファイル欄のリンク先を sanitizeFilename + markdownLinkDest に、テキストを escapeLinkText に

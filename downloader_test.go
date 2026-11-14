@@ -87,7 +87,9 @@ func TestDownloadAttachments(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "image/png")
-		io.WriteString(w, "fake-image-content")
+		if _, err := io.WriteString(w, "fake-image-content"); err != nil {
+			t.Errorf("レスポンスの書き込みに失敗しました: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -127,7 +129,9 @@ func TestDownloadAttachments_SkipExisting(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		callCount++
 		w.Header().Set("Content-Type", "image/png")
-		io.WriteString(w, "fake-image-content")
+		if _, err := io.WriteString(w, "fake-image-content"); err != nil {
+			t.Errorf("レスポンスの書き込みに失敗しました: %v", err)
+		}
 	}))
 	defer server.Close()
 

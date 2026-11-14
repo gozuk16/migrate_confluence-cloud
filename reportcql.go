@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -304,10 +305,10 @@ func tokenizeCQL(s string) ([]cqlToken, error) {
 	rs := []rune(s)
 	for i := 0; i < len(rs); {
 		c := rs[i]
-		switch {
-		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+		switch c {
+		case ' ', '\t', '\n', '\r':
 			i++
-		case c == '"' || c == '\'':
+		case '"', '\'':
 			var sb strings.Builder
 			j := i + 1
 			for ; j < len(rs) && rs[j] != c; j++ {
@@ -321,17 +322,17 @@ func tokenizeCQL(s string) ([]cqlToken, error) {
 			}
 			tokens = append(tokens, cqlToken{"string", sb.String()})
 			i = j + 1
-		case c == '(' || c == ')' || c == ',':
+		case '(', ')', ',':
 			tokens = append(tokens, cqlToken{string(c), string(c)})
 			i++
-		case c == '!' || c == '>' || c == '<' || c == '=' || c == '~':
+		case '!', '>', '<', '=', '~':
 			if i+1 < len(rs) && (rs[i+1] == '=' || (c == '!' && rs[i+1] == '~')) {
 				tokens = append(tokens, cqlToken{"op", string(rs[i : i+2])})
 				i += 2
 				continue
 			}
 			if c == '!' {
-				return nil, fmt.Errorf("不正な演算子 !")
+				return nil, errors.New(`不正な演算子 "!"`)
 			}
 			tokens = append(tokens, cqlToken{"op", string(c)})
 			i++

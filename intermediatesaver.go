@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,7 +93,12 @@ func (s *IntermediateSaver) SavePage(page *Page, spaceKey string, labels []Label
 	if err != nil {
 		return fmt.Errorf("メタデータファイル作成エラー: %w", err)
 	}
-	defer f.Close()
+	// Close の失敗はログに出すだけで、戻り値は変えない（従来どおり保存成功として扱う）
+	defer func() {
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("メタデータファイルのクローズに失敗しました", "path", metaPath, "error", cerr)
+		}
+	}()
 
 	if err := toml.NewEncoder(f).Encode(meta); err != nil {
 		return fmt.Errorf("メタデータ保存エラー: %w", err)
@@ -129,7 +135,10 @@ func (s *IntermediateSaver) SaveComments(pageTitle, spaceKey string, comments []
 			return fmt.Errorf("コメントメタデータ作成エラー: %w", err)
 		}
 		encErr := toml.NewEncoder(f).Encode(meta)
-		f.Close()
+		// Close の失敗はログに出すだけで、戻り値は変えない（従来どおり保存成功として扱う）
+		if cerr := f.Close(); cerr != nil {
+			slog.Warn("コメントメタデータファイルのクローズに失敗しました", "path", metaPath, "error", cerr)
+		}
 		if encErr != nil {
 			return fmt.Errorf("コメントメタデータ保存エラー: %w", encErr)
 		}

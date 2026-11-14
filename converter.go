@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -91,7 +92,7 @@ func (c *Converter) WriteUnsupportedReport(path string) error {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			sb.WriteString(fmt.Sprintf("| `%s` | %d | rich-text-bodyの内容を出力、またはコメントとして保持 |\n", k, macros[k]))
+			fmt.Fprintf(&sb, "| `%s` | %d | rich-text-bodyの内容を出力、またはコメントとして保持 |\n", k, macros[k])
 		}
 		sb.WriteString("\n")
 	}
@@ -107,7 +108,7 @@ func (c *Converter) WriteUnsupportedReport(path string) error {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			sb.WriteString(fmt.Sprintf("| `%s` | %d | 無視 |\n", k, elems[k]))
+			fmt.Fprintf(&sb, "| `%s` | %d | 無視 |\n", k, elems[k])
 		}
 	}
 
@@ -136,7 +137,9 @@ func (p *taskListPlugin) Init(conv *converter.Converter) error {
 				return converter.RenderTryNext
 			}
 
-			w.WriteString("\n\n")
+			// 出力はいったん bytes.Buffer に組み立て、最後にまとめて w に書き込む
+			var out bytes.Buffer
+			out.WriteString("\n\n")
 			for child := n.FirstChild; child != nil; child = child.NextSibling {
 				if child.Type != html.ElementNode || child.Data != "li" {
 					continue
@@ -151,19 +154,23 @@ func (p *taskListPlugin) Init(conv *converter.Converter) error {
 				}
 
 				if status == "complete" {
-					w.WriteString("- [x] ")
+					out.WriteString("- [x] ")
 				} else {
-					w.WriteString("- [ ] ")
+					out.WriteString("- [ ] ")
 				}
 
 				var buf bytes.Buffer
 				ctx.RenderChildNodes(ctx, &buf, child)
 				content := bytes.TrimSpace(buf.Bytes())
 				content = ctx.UnEscapeContent(content)
-				w.Write(content)
-				w.WriteRune('\n')
+				out.Write(content)
+				out.WriteRune('\n')
 			}
-			w.WriteString("\n")
+			out.WriteString("\n")
+			// 書き込みの失敗はログに出すだけで、従来どおり RenderSuccess を返す
+			if _, err := w.Write(out.Bytes()); err != nil {
+				slog.Warn("タスクリストの書き込みに失敗しました", "error", err)
+			}
 			return converter.RenderSuccess
 		}, converter.PriorityEarly)
 	return nil
@@ -199,7 +206,7 @@ func (c *Converter) Convert(xhtml string) (string, error) {
 
 	result, err := conv.ConvertString(preprocessed)
 	if err != nil {
-		return "", fmt.Errorf("Markdown変換エラー: %w", err)
+		return "", fmt.Errorf("markdown変換エラー: %w", err)
 	}
 
 	return strings.TrimSpace(result), nil
@@ -288,7 +295,7 @@ func (c *Converter) processElement(buf *bytes.Buffer, node *html.Node) {
 			text = node.FirstChild.Data
 		}
 		if text != "" {
-			buf.WriteString(fmt.Sprintf("<!-- Placeholder: %s -->", html.EscapeString(text)))
+			fmt.Fprintf(buf, "<!-- Placeholder: %s -->", html.EscapeString(text))
 		}
 		return
 	case "ac:layout", "ac:layout-section", "ac:layout-cell":
@@ -384,7 +391,7 @@ func (c *Converter) processMacro(buf *bytes.Buffer, node *html.Node) {
 	case "anchor":
 		anchorName := getMacroParam(node, "")
 		if anchorName != "" {
-			buf.WriteString(fmt.Sprintf(`<span id="%s"></span>`, html.EscapeString(anchorName)))
+			fmt.Fprintf(buf, `<span id="%s"></span>`, html.EscapeString(anchorName))
 		}
 	case "excerpt":
 		// 抜粋定義: 内容を保持
@@ -409,25 +416,25 @@ func (c *Converter) processMacro(buf *bytes.Buffer, node *html.Node) {
 		if page == "" {
 			page = getMacroParam(node, "page")
 		}
-		buf.WriteString(fmt.Sprintf("<!-- excerpt-include: %s -->", html.EscapeString(page)))
+		fmt.Fprintf(buf, "<!-- excerpt-include: %s -->", html.EscapeString(page))
 	case "include":
 		page := getMacroParam(node, "")
-		buf.WriteString(fmt.Sprintf("<!-- include: %s -->", html.EscapeString(page)))
+		fmt.Fprintf(buf, "<!-- include: %s -->", html.EscapeString(page))
 	case "toc", "toc-zone":
 		// 目次マクロは省略
 	case "children", "pagetree":
-		buf.WriteString(fmt.Sprintf("<!-- macro: %s -->", macroName))
+		fmt.Fprintf(buf, "<!-- macro: %s -->", macroName)
 	case "recently-updated", "blog-posts", "contentbylabel":
-		buf.WriteString(fmt.Sprintf("<!-- macro: %s -->", macroName))
+		fmt.Fprintf(buf, "<!-- macro: %s -->", macroName)
 	case "widget":
 		url := getMacroParam(node, "url")
 		if url != "" {
-			buf.WriteString(fmt.Sprintf("<!-- widget: %s -->", html.EscapeString(url)))
+			fmt.Fprintf(buf, "<!-- widget: %s -->", html.EscapeString(url))
 		} else {
 			buf.WriteString("<!-- macro: widget -->")
 		}
 	case "gallery", "multimedia", "jirachart":
-		buf.WriteString(fmt.Sprintf("<!-- macro: %s -->", macroName))
+		fmt.Fprintf(buf, "<!-- macro: %s -->", macroName)
 	default:
 		// 未対応マクロ: rich-text-bodyの内容を出力、なければコメント
 		body := findChild(node, "ac:rich-text-body")
@@ -438,7 +445,7 @@ func (c *Converter) processMacro(buf *bytes.Buffer, node *html.Node) {
 			}
 		} else {
 			c.trackUnsupportedMacro(macroName)
-			buf.WriteString(fmt.Sprintf("<!-- macro: %s -->", macroName))
+			fmt.Fprintf(buf, "<!-- macro: %s -->", macroName)
 		}
 	}
 }
@@ -455,9 +462,9 @@ func (c *Converter) processCodeMacro(buf *bytes.Buffer, node *html.Node) {
 	}
 
 	if title != "" {
-		buf.WriteString(fmt.Sprintf("<p><strong>%s</strong></p>\n", html.EscapeString(title)))
+		fmt.Fprintf(buf, "<p><strong>%s</strong></p>\n", html.EscapeString(title))
 	}
-	buf.WriteString(fmt.Sprintf("<pre><code class=\"language-%s\">%s</code></pre>", lang, html.EscapeString(codeContent)))
+	fmt.Fprintf(buf, "<pre><code class=\"language-%s\">%s</code></pre>", lang, html.EscapeString(codeContent))
 }
 
 // processNoformatMacro はnoformatマクロをコードブロックに変換する
@@ -467,7 +474,7 @@ func (c *Converter) processNoformatMacro(buf *bytes.Buffer, node *html.Node) {
 	if plainBody != nil && plainBody.FirstChild != nil {
 		content = plainBody.FirstChild.Data
 	}
-	buf.WriteString(fmt.Sprintf("<pre><code>%s</code></pre>", html.EscapeString(content)))
+	fmt.Fprintf(buf, "<pre><code>%s</code></pre>", html.EscapeString(content))
 }
 
 // processAlertMacro はinfo/note/warning/tipマクロをGFM Alertsに変換する
@@ -475,9 +482,9 @@ func (c *Converter) processAlertMacro(buf *bytes.Buffer, node *html.Node, alertT
 	title := getMacroParam(node, "title")
 
 	buf.WriteString("<blockquote>\n")
-	buf.WriteString(fmt.Sprintf("<p>[!%s]</p>\n", alertType))
+	fmt.Fprintf(buf, "<p>[!%s]</p>\n", alertType)
 	if title != "" {
-		buf.WriteString(fmt.Sprintf("<p><strong>%s</strong></p>\n", html.EscapeString(title)))
+		fmt.Fprintf(buf, "<p><strong>%s</strong></p>\n", html.EscapeString(title))
 	}
 
 	body := findChild(node, "ac:rich-text-body")
@@ -497,7 +504,7 @@ func (c *Converter) processExpandMacro(buf *bytes.Buffer, node *html.Node) {
 		title = "詳細"
 	}
 
-	buf.WriteString(fmt.Sprintf("<details><summary>%s</summary>\n", html.EscapeString(title)))
+	fmt.Fprintf(buf, "<details><summary>%s</summary>\n", html.EscapeString(title))
 
 	body := findChild(node, "ac:rich-text-body")
 	if body != nil {
@@ -515,7 +522,7 @@ func (c *Converter) processPanelMacro(buf *bytes.Buffer, node *html.Node) {
 
 	buf.WriteString("<blockquote>\n")
 	if title != "" {
-		buf.WriteString(fmt.Sprintf("<p><strong>%s</strong></p>\n", html.EscapeString(title)))
+		fmt.Fprintf(buf, "<p><strong>%s</strong></p>\n", html.EscapeString(title))
 	}
 
 	body := findChild(node, "ac:rich-text-body")
@@ -567,7 +574,7 @@ func (c *Converter) processStatusMacro(buf *bytes.Buffer, node *html.Node) {
 		colorEmoji = "⚫ "
 	}
 
-	buf.WriteString(fmt.Sprintf("<strong>%s[%s]</strong>", colorEmoji, html.EscapeString(label)))
+	fmt.Fprintf(buf, "<strong>%s[%s]</strong>", colorEmoji, html.EscapeString(label))
 }
 
 // processJiraMacro はjiraマクロをリンクに変換する
@@ -575,13 +582,13 @@ func (c *Converter) processJiraMacro(buf *bytes.Buffer, node *html.Node) {
 	key := getMacroParam(node, "key")
 	if key != "" {
 		// シングルイシューリンク
-		buf.WriteString(fmt.Sprintf("<strong>%s</strong>", html.EscapeString(key)))
+		fmt.Fprintf(buf, "<strong>%s</strong>", html.EscapeString(key))
 		return
 	}
 	// JQLクエリの場合はコメントとして保持
 	jql := getMacroParam(node, "jqlQuery")
 	if jql != "" {
-		buf.WriteString(fmt.Sprintf("<!-- jira-query: %s -->", html.EscapeString(jql)))
+		fmt.Fprintf(buf, "<!-- jira-query: %s -->", html.EscapeString(jql))
 		return
 	}
 	buf.WriteString("<!-- macro: jira -->")
@@ -606,11 +613,11 @@ func (c *Converter) processImage(buf *bytes.Buffer, node *html.Node) {
 		filename := getAttr(riAttachment, "ri:filename")
 		if filename != "" {
 			if heightAttr != "" {
-				buf.WriteString(fmt.Sprintf(`<img src="%s" alt="%s"%s>`,
-					html.EscapeString(filename), html.EscapeString(alt), heightAttr))
+				fmt.Fprintf(buf, `<img src="%s" alt="%s"%s>`,
+					html.EscapeString(filename), html.EscapeString(alt), heightAttr)
 			} else {
-				buf.WriteString(fmt.Sprintf(`<img src="%s" alt="%s">`,
-					html.EscapeString(filename), html.EscapeString(alt)))
+				fmt.Fprintf(buf, `<img src="%s" alt="%s">`,
+					html.EscapeString(filename), html.EscapeString(alt))
 			}
 			return
 		}
@@ -622,11 +629,11 @@ func (c *Converter) processImage(buf *bytes.Buffer, node *html.Node) {
 		imgURL := getAttr(riURL, "ri:value")
 		if imgURL != "" {
 			if heightAttr != "" {
-				buf.WriteString(fmt.Sprintf(`<img src="%s" alt="%s"%s>`,
-					html.EscapeString(imgURL), html.EscapeString(alt), heightAttr))
+				fmt.Fprintf(buf, `<img src="%s" alt="%s"%s>`,
+					html.EscapeString(imgURL), html.EscapeString(alt), heightAttr)
 			} else {
-				buf.WriteString(fmt.Sprintf(`<img src="%s" alt="%s">`,
-					html.EscapeString(imgURL), html.EscapeString(alt)))
+				fmt.Fprintf(buf, `<img src="%s" alt="%s">`,
+					html.EscapeString(imgURL), html.EscapeString(alt))
 			}
 			return
 		}
@@ -667,8 +674,8 @@ func (c *Converter) processLink(buf *bytes.Buffer, node *html.Node) {
 		if anchor != "" {
 			pageFile += "#" + anchor
 		}
-		buf.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`,
-			html.EscapeString(pageFile), html.EscapeString(linkText)))
+		fmt.Fprintf(buf, `<a href="%s">%s</a>`,
+			html.EscapeString(pageFile), html.EscapeString(linkText))
 		return
 	}
 
@@ -677,8 +684,8 @@ func (c *Converter) processLink(buf *bytes.Buffer, node *html.Node) {
 		if linkText == "" {
 			linkText = anchor
 		}
-		buf.WriteString(fmt.Sprintf(`<a href="#%s">%s</a>`,
-			html.EscapeString(anchor), html.EscapeString(linkText)))
+		fmt.Fprintf(buf, `<a href="#%s">%s</a>`,
+			html.EscapeString(anchor), html.EscapeString(linkText))
 		return
 	}
 
@@ -691,7 +698,7 @@ func (c *Converter) processLink(buf *bytes.Buffer, node *html.Node) {
 				displayName = name
 			}
 		}
-		buf.WriteString(fmt.Sprintf("<strong>@%s</strong>", html.EscapeString(displayName)))
+		fmt.Fprintf(buf, "<strong>@%s</strong>", html.EscapeString(displayName))
 		return
 	}
 
@@ -701,8 +708,8 @@ func (c *Converter) processLink(buf *bytes.Buffer, node *html.Node) {
 		if linkText == "" {
 			linkText = href
 		}
-		buf.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`,
-			html.EscapeString(href), html.EscapeString(linkText)))
+		fmt.Fprintf(buf, `<a href="%s">%s</a>`,
+			html.EscapeString(href), html.EscapeString(linkText))
 		return
 	}
 
@@ -712,8 +719,8 @@ func (c *Converter) processLink(buf *bytes.Buffer, node *html.Node) {
 		if linkText == "" {
 			linkText = filename
 		}
-		buf.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`,
-			html.EscapeString(filename), html.EscapeString(linkText)))
+		fmt.Fprintf(buf, `<a href="%s">%s</a>`,
+			html.EscapeString(filename), html.EscapeString(linkText))
 		return
 	}
 
@@ -729,8 +736,8 @@ func (c *Converter) processLink(buf *bytes.Buffer, node *html.Node) {
 		}
 		if blogTitle != "" {
 			blogFile := sanitizeFilename(blogTitle) + "/index.md"
-			buf.WriteString(fmt.Sprintf(`<a href="%s">%s</a>`,
-				html.EscapeString(blogFile), html.EscapeString(linkText)))
+			fmt.Fprintf(buf, `<a href="%s">%s</a>`,
+				html.EscapeString(blogFile), html.EscapeString(linkText))
 		} else {
 			buf.WriteString(html.EscapeString(linkText))
 		}
@@ -777,7 +784,7 @@ func (c *Converter) processTaskList(buf *bytes.Buffer, node *html.Node) {
 				}
 			}
 
-			buf.WriteString(fmt.Sprintf(`<li data-task-status="%s">%s</li>`+"\n", status, taskBody))
+			fmt.Fprintf(buf, `<li data-task-status="%s">%s</li>`+"\n", status, taskBody)
 		}
 	}
 	buf.WriteString("</ul>\n")
@@ -792,11 +799,7 @@ func (c *Converter) processEmoticon(buf *bytes.Buffer, node *html.Node) {
 		return
 	}
 
-	// ac:emoji-idがあればUnicodeに変換（例: "1f600" → 😀）
-	emojiID := getAttr(node, "ac:emoji-id")
-	if emojiID != "" {
-		// 数値IDはfallbackで処理済みなのでnameにフォールスルー
-	}
+	// ac:emoji-id（例: "1f600"）はfallbackで処理済みなので、ここではac:nameで変換する
 
 	name := getAttr(node, "ac:name")
 	emoji := emoticonToEmoji(name)
