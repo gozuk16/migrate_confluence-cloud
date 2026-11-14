@@ -34,7 +34,17 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 | ページプロパティレポート（detailssummary） | `{{< page-properties-report >}}` ショートコード（条件はCQLから変換） |
 | 子ページ一覧（children） | `{{< children >}}` ショートコード（入れ子の箇条書き） |
 | ロードマッププランナー（roadmap） | SVG の図（`confluence-roadmap-N.svg` を変換時に生成し、`{{< roadmap >}}` ショートコードで差し込む） |
-| draw.io の図・ボード（draw.io アプリ） | 添付のプレビュー画像 `<図の名前>.png` を表示し、元の図ファイルへリンクする（`--download-attachments` で添付を保存しておく） |
+| draw.io の図・ボード（draw.io アプリ） | SVG の図（図ファイルから draw.io デスクトップ版で `confluence-drawio-N.svg` を作り、`{{< drawio >}}` ショートコードで本文に差し込む。「拡大表示」ボタンで draw.io ビューアを開く）。SVG にできないときは添付のプレビュー画像 `<図の名前>.png` |
+
+### draw.io の図
+
+draw.io アプリの図とボードは、移行時に図ファイル（添付の `.drawio`）から SVG を作り、ページに直接埋め込みます。図の中の文字は選択できます。Confluence 側の表示設定（シンプルビューア、ライトボックスなど）は再現せず、どの図も同じ表示になります。
+
+- **必要なもの**: `--download-attachments`（図ファイルを保存する）と、draw.io デスクトップ版（SVG を作る）。どちらかが無い図は、変換ログに警告を出して、添付のプレビュー画像（PNG）の表示に戻します
+- **拡大表示**: 図の下の「拡大表示」ボタンで、テーマに同梱した draw.io ビューアがページの上に重ねて図を表示します。図のデータはブラウザの中で処理し、外部には送りません。ビューアは数式用のスクリプトと特殊な図形ライブラリの定義を、必要に応じて `viewer.diagrams.net` から読み込みます
+- **元の図ファイル**: ページ末尾の添付ファイル欄のリンクからダウンロードできます
+- **前提**: SVG はページに直接埋め込むため、図の内容は信頼できるもの（自社の Confluence の図）であることを前提にしています。`<script>` や `javascript:` のリンクを含む SVG は埋め込まず PNG の表示に戻しますが、それ以外の検査はしていません
+- **制限**: 複数ページの図は 1 ページ目だけを埋め込みます（拡大表示ではページを切り替えられます）。図は添付ファイルの最新版から作ります（マクロが指す過去の版は再現しません）。画面の無い Linux で draw.io デスクトップ版を動かすには `xvfb` などが必要です
 
 ## 動作要件
 
@@ -43,6 +53,7 @@ Confluence Cloud REST API v2 を使用してページデータを取得し、Sto
 - `golangci-lint`（`make lint` を使用する場合）
 - `hugo`（Hugo CLI）0.146.0 以上
 - `Node.js` 18 以上（`npx pagefind` を使用する場合）
+- [draw.io デスクトップ版](https://github.com/jgraph/drawio-desktop/releases)（draw.io の図を SVG で埋め込む場合。無ければ図は PNG で表示する）
 
 ## セットアップ
 
@@ -104,6 +115,10 @@ default_space_key = ""
 # 変換時に無視する Confluence マクロ名のリスト
 ignored_macros = []
 
+[drawio]
+# draw.io デスクトップ版のコマンドのパス（空の場合は PATH と既定のインストール先から探す）
+cli_path = ""
+
 # 削除済みユーザーのマッピング（accountId -> 表示名）
 # [deletedUsers]
 # "123456:abcdef" = "山田 太郎"
@@ -121,6 +136,7 @@ ignored_macros = []
 | `output` | `intermediate_dir` | 中間ファイルの保存先ディレクトリ |
 | `search` | `default_space_key` | `space` コマンドのデフォルトスペースキー |
 | `display` | `ignored_macros` | 変換時に無視するマクロ名のリスト |
+| `drawio` | `cli_path` | draw.io デスクトップ版のコマンドのパス（空の場合は PATH の `drawio`・`draw.io` と既定のインストール先から探す） |
 | `deletedUsers` | `"accountId"` | 削除済みアカウントの表示名マッピング |
 
 ## 使い方

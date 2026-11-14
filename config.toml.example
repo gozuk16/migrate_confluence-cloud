@@ -22,6 +22,11 @@ default_space_key = ""
 # 変換時に無視するConfluenceマクロ名のリスト
 ignored_macros = []
 
+[drawio]
+# draw.io デスクトップ版のコマンドのパス。draw.io の図を SVG にして埋め込むのに使う
+# （空の場合は PATH の drawio / draw.io と、既定のインストール先から探す。見つからなければ図は PNG で表示する）
+cli_path = ""
+
 # 削除済みユーザーのマッピング（accountId -> 表示名）
 # 例:
 # [deletedUsers]

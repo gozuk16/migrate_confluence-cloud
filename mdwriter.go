@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,6 +15,47 @@ type MDWriter struct {
 	outputDir   string
 	converter   *Converter
 	resolveUser func(accountID string) string // accountId → 表示名。nil の場合は解決しない
+
+	drawioEnabled  bool           // draw.io の図を SVG にするか（SetDrawioExporter を呼ぶと true）
+	drawio         DrawioExporter // draw.io の図を SVG にする。使えないときは nil
+	drawioErr      error          // drawio が nil の理由
+	attachmentsDir string         // 添付ファイルの保存先の基準フォルダ。空なら outputDir
+}
+
+// SetDrawioExporter は draw.io の図を SVG にして本文へ埋め込むようにする。
+// exporter が使えないとき（nil）は unavailable に理由を渡す。その場合、図は警告つきで PNG の表示に戻る。
+// attachmentsDir は添付ファイルの保存先の基準フォルダ（設定の output.attachments_dir。空なら Markdown と同じフォルダ）
+func (w *MDWriter) SetDrawioExporter(exporter DrawioExporter, unavailable error, attachmentsDir string) {
+	w.drawioEnabled = true
+	w.drawio = exporter
+	w.drawioErr = unavailable
+	w.attachmentsDir = attachmentsDir
+}
+
+// drawioSVGFunc はページの draw.io の図を SVG にする関数を返す。SetDrawioExporter を呼んでいなければ nil を返す。
+// 図ファイルは、添付ファイルのダウンロードで保存されたものを読む
+func (w *MDWriter) drawioSVGFunc(spaceKey, pageTitle string) drawioSVGFunc {
+	if !w.drawioEnabled {
+		return nil
+	}
+	base := w.attachmentsDir
+	if base == "" {
+		base = w.outputDir
+	}
+	dir := filepath.Join(base, spaceKey, sanitizeFilename(pageTitle))
+	return func(diagramName string) ([]byte, error) {
+		if w.drawio == nil {
+			if w.drawioErr != nil {
+				return nil, w.drawioErr
+			}
+			return nil, errors.New("draw.io のコマンドを使えません")
+		}
+		src := filepath.Join(dir, sanitizeFilename(diagramName))
+		if _, err := os.Stat(src); err != nil {
+			return nil, errors.New("図ファイルが保存されていません（--download-attachments を付けて移行してください）")
+		}
+		return w.drawio.ExportSVG(src)
+	}
 }
 
 // NewMDWriter は新しいMDWriterを作成する
@@ -40,7 +82,7 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 		return fmt.Errorf("markdownコンテンツ生成エラー: %w", err)
 	}
 
-	// 本文が参照するファイル（ロードマップの SVG）を先に書き出す。
+	// 本文が参照するファイル（ロードマップや draw.io の SVG）を先に書き出す。
 	// 途中で失敗しても、本文が存在しないファイルを参照したまま残らないようにするため
 	keep := map[string]bool{}
 	for _, f := range files {
@@ -61,16 +103,18 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	for _, a := range attachments {
 		keep[sanitizeFilename(a.Title)] = true
 	}
-	stale, err := filepath.Glob(filepath.Join(pageDir, roadmapFilePrefix+"*.svg"))
-	if err != nil {
-		return fmt.Errorf("古いファイルの検索に失敗しました: %w", err)
-	}
-	for _, p := range stale {
-		if keep[filepath.Base(p)] {
-			continue
+	for _, prefix := range []string{roadmapFilePrefix, drawioFilePrefix} {
+		stale, err := filepath.Glob(filepath.Join(pageDir, prefix+"*.svg"))
+		if err != nil {
+			return fmt.Errorf("古いファイルの検索に失敗しました: %w", err)
 		}
-		if err := os.Remove(p); err != nil {
-			return fmt.Errorf("古いファイルの削除に失敗しました: %w", err)
+		for _, p := range stale {
+			if keep[filepath.Base(p)] {
+				continue
+			}
+			if err := os.Remove(p); err != nil {
+				return fmt.Errorf("古いファイルの削除に失敗しました: %w", err)
+			}
 		}
 	}
 
@@ -198,7 +242,10 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 
 	// 本文を先に変換する（ページプロパティを front matter に書くため）
 	attachmentMap := buildAttachmentMap(attachments)
-	res, convErr := w.converter.ConvertADFPage(page.Body.AtlasDocFormat.Value, attachmentMap)
+	res, convErr := w.converter.ConvertADFPageWith(page.Body.AtlasDocFormat.Value, adfOptions{
+		attachmentMap: attachmentMap,
+		drawioSVG:     w.drawioSVGFunc(spaceKey, page.Title),
+	})
 	if convErr != nil {
 		slog.Warn("本文の変換に失敗したため元のADF JSONを出力します", "pageTitle", page.Title, "error", convErr)
 	}
@@ -383,7 +430,8 @@ func formatDateForFrontMatter(dateStr string) string {
 // renderAttachmentSection は添付ファイル欄（見出しと一覧）を返す。添付が無ければ空文字を返す。
 // 画像以外は箇条書き、画像はその場に表示する。画像は前後を空行で区切り、
 // 直前の箇条書きの項目に取り込まれないようにする。
-// リンク先はダウンロード時の保存名（サニタイズ後）にし、空白・括弧・# などをエンコードする
+// リンク先はダウンロード時の保存名（サニタイズ後）にし、空白・括弧・# などをエンコードする。
+// draw.io の図ファイルは、ブラウザで開くと XML の中身が表示されるだけなので、ダウンロードするリンクにする
 func renderAttachmentSection(attachments []Attachment) string {
 	if len(attachments) == 0 {
 		return ""
@@ -399,6 +447,9 @@ func renderAttachmentSection(attachments []Attachment) string {
 			continue
 		}
 		item := "- [" + text + "](" + dest + ")"
+		if att.MediaType == drawioMediaType {
+			item = "- " + drawioDownloadLink(att.Title)
+		}
 		if inList {
 			blocks[len(blocks)-1] += "\n" + item
 		} else {

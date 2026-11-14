@@ -6,10 +6,20 @@
 
 ## 未着手
 
+- [ ] feature/drawio-svg（親）と feature/drawio-shortcode（テーマ）の push・PR・マージ。テーマ PR を先にマージし、親 PR のサブモジュールのポインタをテーマ main に付け直してから親をマージする
+- [ ] draw.io の SVG に入る代替文言「Text is not SVG - cannot display」（`<switch>` 内。画面には出ない）が Pagefind の検索に拾われないか確認し、必要なら取り除く
+- [ ] draw.io の複数ページの図は 1 ページ目だけを埋め込んでいる。マクロがページを指定している場合の対応を検討する
 - [ ] 添付画像の代替テキスト・ファイル名に `|` があると、テーブルセル内でセルが割れる（escapeLinkText・markdownLinkDest で `|` を扱う。PR #22 のレビューで判明、PR 前からの問題）
 
 ## 完了
 
+- [x] draw.io の図を SVG で埋め込み、ビューアで拡大表示する（親: feature/drawio-svg、テーマ: feature/drawio-shortcode）
+  - 移行時に draw.io デスクトップ版のコマンドで .drawio から SVG を作り（明るい配色に固定）、`confluence-drawio-N.svg` として書き出して `{{< drawio >}}` ショートコードで本文に直接差し込む（リンクで包まない）。simple・lbox の設定は再現しない
+  - コマンドが無い・図ファイルが無い・変換に失敗したときは、警告を出して従来の PNG 表示に戻す。`[drawio] cli_path` を設定に追加
+  - テーマ: drawio ショートコード、「拡大表示」ボタン（assets/js/drawio.js）、draw.io ビューア v26.2.2 を static/vendor/drawio に同梱。ボタンを押したときだけ読み込み、図のデータは外部に送らない（図形定義・数式スクリプトは viewer.diagrams.net から取得を許可）
+  - 添付ファイル欄の draw.io の図ファイルは download 属性付きのリンクにした
+  - テスト追加（drawioexport_test.go・drawio_test.go・mdwriter_test.go）、make test 成功、make lint 0 件。サブエージェントでコードレビューし指摘を反映（打ち切り時の待ち時間、JS のエラー処理、同じ図の使い回し、スクリプトを含む SVG の拒否）
+  - draw.io のページを再移行し、新しく起動した hugo server（1314）とヘッドレス Chrome で確認: SVG の直接埋め込み 3 つ、図を包むリンクなし、文字を選択できる、ボタンで拡大表示が開いて Esc で閉じる、添付ファイル欄にダウンロードのリンク。1313 のサーバーは起動後にできたテーマの static/ を認識しないため、再起動が必要
 - [x] golangci-lint の既存の指摘を解消し `make lint` を通す（ブランチ: fix/lint-errors、PR #23）
   - 表示されていた 25 件（errcheck 16・staticcheck 9）のほか、同じ種類の指摘の表示上限（3 件）で隠れていた分も含め、全 65 件を解消
   - errcheck: Close・Write の失敗は slog.Warn でログに出す（戻り値は変えない）。テストはエラーを確認する

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -847,5 +848,139 @@ func TestRenderAttachmentSection(t *testing.T) {
 				t.Errorf("got %q\nwant %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// stubDrawioExporter はテスト用の DrawioExporter。図ファイルの内容を SVG の中に写す
+type stubDrawioExporter struct{ err error }
+
+func (e stubDrawioExporter) ExportSVG(srcPath string) ([]byte, error) {
+	if e.err != nil {
+		return nil, e.err
+	}
+	data, err := os.ReadFile(srcPath)
+	if err != nil {
+		return nil, err
+	}
+	return []byte("<svg>" + string(data) + "</svg>"), nil
+}
+
+func drawioTestPage() *Page {
+	adf := `{"version":1,"type":"doc","content":[{"type":"extension","attrs":{"extensionType":"com.atlassian.ecosystem",` +
+		`"extensionKey":"app/env/static/drawio","parameters":{"guestParams":{"diagramName":"d:1.drawio"}}}}]}`
+	return &Page{ID: "1", Title: "図のページ", SpaceID: "1", Body: PageBody{AtlasDocFormat: AtlasDocFormat{Value: adf}}}
+}
+
+var drawioTestAttachments = []Attachment{
+	{ID: "a1", Title: "d:1.drawio", MediaType: drawioMediaType},
+	{ID: "a2", Title: "d:1.drawio.png", MediaType: "image/png"},
+}
+
+// 保存済みの図ファイルを SVG にして書き出し、本文にショートコードを出す。前回の SVG は消す
+func TestMDWriter_WritesDrawioSVG(t *testing.T) {
+	for _, tt := range []struct {
+		name           string
+		attachmentsDir string // 設定の output.attachments_dir に当たる。空なら Markdown と同じフォルダ
+	}{
+		{name: "添付は Markdown と同じフォルダ"},
+		{name: "添付は別のフォルダ", attachmentsDir: "att"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			mdDir := filepath.Join(tmpDir, "md")
+			attBase := ""
+			attDir := filepath.Join(mdDir, "TEST", "図のページ")
+			if tt.attachmentsDir != "" {
+				attBase = filepath.Join(tmpDir, tt.attachmentsDir)
+				attDir = filepath.Join(attBase, "TEST", "図のページ")
+			}
+			pageDir := filepath.Join(mdDir, "TEST", "図のページ")
+			for _, d := range []string{pageDir, attDir} {
+				if err := os.MkdirAll(d, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// 添付はサニタイズした名前で保存されている
+			if err := os.WriteFile(filepath.Join(attDir, "d_1.drawio"), []byte("mxfile"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(pageDir, "confluence-drawio-9.svg"), []byte("old"), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			writer := newTestMDWriter(mdDir)
+			writer.SetDrawioExporter(stubDrawioExporter{}, nil, attBase)
+			if err := writer.WritePage(drawioTestPage(), "TEST", "", "", nil, nil, drawioTestAttachments); err != nil {
+				t.Fatalf("WritePage エラー: %v", err)
+			}
+
+			if data, err := os.ReadFile(filepath.Join(pageDir, "confluence-drawio-1.svg")); err != nil || string(data) != "<svg>mxfile</svg>" {
+				t.Errorf("confluence-drawio-1.svg = %q, %v", data, err)
+			}
+			if _, err := os.Stat(filepath.Join(pageDir, "confluence-drawio-9.svg")); !os.IsNotExist(err) {
+				t.Error("前回の変換で残った confluence-drawio-9.svg を消すこと")
+			}
+			md, _ := os.ReadFile(filepath.Join(pageDir, "index.md"))
+			if !strings.Contains(string(md), `{{< drawio src="confluence-drawio-1.svg" file="d_1.drawio" title="d:1.drawio" >}}`) {
+				t.Errorf("本文にショートコードがありません:\n%s", md)
+			}
+			// 添付ファイル欄の図ファイルはダウンロードするリンクにする
+			if !strings.Contains(string(md), `- <a href="d_1.drawio" download>d:1.drawio</a>`) {
+				t.Errorf("添付ファイル欄にダウンロードのリンクがありません:\n%s", md)
+			}
+		})
+	}
+}
+
+// SVG にできないときは PNG の表示に戻し、前回の SVG は消す
+func TestMDWriter_DrawioFallsBackToPNG(t *testing.T) {
+	tests := []struct {
+		name     string
+		exporter DrawioExporter
+		cliErr   error
+		saved    bool // 図ファイルが保存されているか
+	}{
+		{name: "コマンドが見つからない", exporter: nil, cliErr: errors.New("コマンドが見つかりません"), saved: true},
+		{name: "図ファイルが保存されていない", exporter: stubDrawioExporter{}, saved: false},
+		{name: "変換に失敗", exporter: stubDrawioExporter{err: errors.New("失敗")}, saved: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			pageDir := filepath.Join(tmpDir, "TEST", "図のページ")
+			if err := os.MkdirAll(pageDir, 0755); err != nil {
+				t.Fatal(err)
+			}
+			if tt.saved {
+				if err := os.WriteFile(filepath.Join(pageDir, "d_1.drawio"), []byte("mxfile"), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(filepath.Join(pageDir, "confluence-drawio-1.svg"), []byte("old"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			writer := newTestMDWriter(tmpDir)
+			writer.SetDrawioExporter(tt.exporter, tt.cliErr, "")
+			if err := writer.WritePage(drawioTestPage(), "TEST", "", "", nil, nil, drawioTestAttachments); err != nil {
+				t.Fatalf("WritePage エラー: %v", err)
+			}
+			md, _ := os.ReadFile(filepath.Join(pageDir, "index.md"))
+			if !strings.Contains(string(md), "[![d:1.drawio](d_1.drawio.png)](d_1.drawio)") {
+				t.Errorf("PNG の表示に戻っていません:\n%s", md)
+			}
+			if strings.Contains(string(md), "{{< drawio") {
+				t.Errorf("ショートコードを出力しないこと:\n%s", md)
+			}
+			if _, err := os.Stat(filepath.Join(pageDir, "confluence-drawio-1.svg")); !os.IsNotExist(err) {
+				t.Error("使わなくなった confluence-drawio-1.svg を消すこと")
+			}
+		})
+	}
+}
+
+// SetDrawioExporter を呼んでいなければ、従来どおり PNG の表示で、警告も出さない
+func TestMDWriter_DrawioDisabledByDefault(t *testing.T) {
+	if f := newTestMDWriter(t.TempDir()).drawioSVGFunc("TEST", "p"); f != nil {
+		t.Error("SetDrawioExporter を呼ぶまで drawioSVGFunc は nil を返すこと")
 	}
 }

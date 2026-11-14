@@ -33,6 +33,17 @@ type adfRenderer struct {
 	seenProps     map[string]bool   // 収集済みの項目名
 	warnings      []string          // 変換時の警告（呼び出し側がログに出す）
 	files         []PageFile        // 本文と一緒にページのフォルダへ書き出すファイル（ロードマップの SVG など）
+	drawioSVG     drawioSVGFunc     // draw.io の図を SVG にする。nil なら SVG にせず PNG で表示する
+	drawioFiles   map[string]string // SVG にした draw.io の図の名前 → 書き出すファイル名（SVG にできなかった図は空文字）
+}
+
+// drawioSVGFunc は draw.io の図（添付ファイル名）を、ページに直接埋め込める SVG にして返す
+type drawioSVGFunc func(diagramName string) ([]byte, error)
+
+// adfOptions は ADF の変換に渡す、ページごとの情報
+type adfOptions struct {
+	attachmentMap map[string]string // media UUID → ファイル名。添付一覧が不明なら nil
+	drawioSVG     drawioSVGFunc     // draw.io の図を SVG にする。nil なら SVG にせず PNG で表示する
 }
 
 // adfResult はページ本文の変換結果
@@ -57,6 +68,11 @@ func convertADF(adfJSON string, attachmentMap map[string]string) (string, error)
 
 // convertADFPage は ADF JSON 文字列を Markdown に変換し、ページプロパティと警告もあわせて返す
 func convertADFPage(adfJSON string, attachmentMap map[string]string) (adfResult, error) {
+	return convertADFPageWith(adfJSON, adfOptions{attachmentMap: attachmentMap})
+}
+
+// convertADFPageWith は convertADFPage に加えて、ページごとの情報（opts）を受け取る
+func convertADFPageWith(adfJSON string, opts adfOptions) (adfResult, error) {
 	if adfJSON == "" {
 		return adfResult{}, nil
 	}
@@ -64,7 +80,7 @@ func convertADFPage(adfJSON string, attachmentMap map[string]string) (adfResult,
 	if err := json.Unmarshal([]byte(adfJSON), &root); err != nil {
 		return adfResult{}, fmt.Errorf("ADF JSONパースエラー: %w", err)
 	}
-	r := &adfRenderer{attachmentMap: attachmentMap}
+	r := &adfRenderer{attachmentMap: opts.attachmentMap, drawioSVG: opts.drawioSVG}
 	md := strings.TrimSpace(r.renderNode(root, ""))
 	return adfResult{Markdown: md, Properties: r.properties, Warnings: r.warnings, Files: r.files}, nil
 }
