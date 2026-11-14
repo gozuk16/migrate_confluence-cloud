@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -331,7 +332,7 @@ func tokenizeCQL(s string) ([]cqlToken, error) {
 				continue
 			}
 			if c == '!' {
-				return nil, fmt.Errorf("不正な演算子 %q", "!")
+				return nil, errors.New(`不正な演算子 "!"`)
 			}
 			tokens = append(tokens, cqlToken{"op", string(c)})
 			i++
