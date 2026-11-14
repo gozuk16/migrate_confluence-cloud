@@ -62,18 +62,8 @@ func (d *Downloader) downloadFile(baseURL string, attachment Attachment, targetD
 		return safeFilename, nil
 	}
 
-	// ダウンロードURLを組み立てる
-	// _links.download があればそれを使い、なければ標準URLを構築
-	downloadURL := attachment.Links.Download
-	if downloadURL == "" {
-		downloadURL = fmt.Sprintf("%s/wiki/rest/api/content/%s/child/attachment/%s/download",
-			baseURL, attachment.PageID, attachment.ID)
-	} else if !strings.HasPrefix(downloadURL, "http") {
-		downloadURL = baseURL + downloadURL
-	}
-
 	// HTTPリクエストの作成
-	req, err := http.NewRequest("GET", downloadURL, nil)
+	req, err := http.NewRequest("GET", attachmentDownloadURL(baseURL, attachment), nil)
 	if err != nil {
 		return "", fmt.Errorf("HTTPリクエストの作成に失敗しました: %w", err)
 	}
@@ -104,6 +94,26 @@ func (d *Downloader) downloadFile(baseURL string, attachment Attachment, targetD
 	}
 
 	return safeFilename, nil
+}
+
+// attachmentDownloadURL は添付ファイルのダウンロードURLを返す。
+// _links.download があればそれを使い、なければ v1 のダウンロードURLを組み立てる。
+// v2 API の _links.download は /wiki を基準にした相対パス（/rest/api/content/…/download）なので、
+// baseURL（https://xxx.atlassian.net）に付けるときは /wiki を補う
+func attachmentDownloadURL(baseURL string, attachment Attachment) string {
+	baseURL = strings.TrimRight(baseURL, "/")
+	downloadURL := attachment.Links.Download
+	switch {
+	case downloadURL == "":
+		return fmt.Sprintf("%s/wiki/rest/api/content/%s/child/attachment/%s/download",
+			baseURL, attachment.PageID, attachment.ID)
+	case strings.HasPrefix(downloadURL, "http://"), strings.HasPrefix(downloadURL, "https://"):
+		return downloadURL
+	case strings.HasPrefix(downloadURL, "/wiki/"):
+		return baseURL + downloadURL
+	default:
+		return baseURL + "/wiki" + downloadURL
+	}
 }
 
 // sanitizeFilename はファイル名を安全な形式にサニタイズする

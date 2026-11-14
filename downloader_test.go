@@ -159,3 +159,54 @@ func TestDownloadAttachments_SkipExisting(t *testing.T) {
 		t.Errorf("既存ファイルに対してAPIが呼ばれました (callCount: %d)", callCount)
 	}
 }
+
+// TestAttachmentDownloadURL は添付ファイルのダウンロードURLの組み立てのテスト。
+// v2 API の _links.download は /wiki を基準にした相対パスで返る
+func TestAttachmentDownloadURL(t *testing.T) {
+	const base = "https://example.atlassian.net"
+	tests := []struct {
+		name     string
+		baseURL  string
+		download string
+		want     string
+	}{
+		{
+			name:     "v2 API の相対パスは /wiki を補う",
+			baseURL:  base,
+			download: "/rest/api/content/123/child/attachment/att1/download",
+			want:     base + "/wiki/rest/api/content/123/child/attachment/att1/download",
+		},
+		{
+			name:     "/wiki から始まる相対パスはそのまま付ける",
+			baseURL:  base,
+			download: "/wiki/download/attachments/123/a.png",
+			want:     base + "/wiki/download/attachments/123/a.png",
+		},
+		{
+			name:     "URL の末尾にスラッシュがあっても二重にしない",
+			baseURL:  base + "/",
+			download: "/rest/api/content/123/child/attachment/att1/download",
+			want:     base + "/wiki/rest/api/content/123/child/attachment/att1/download",
+		},
+		{
+			name:     "絶対URLはそのまま使う",
+			baseURL:  base,
+			download: "https://other.example.com/file.png",
+			want:     "https://other.example.com/file.png",
+		},
+		{
+			name:     "download が無ければ v1 のダウンロードURLを組み立てる",
+			baseURL:  base,
+			download: "",
+			want:     base + "/wiki/rest/api/content/123/child/attachment/att1/download",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := Attachment{ID: "att1", PageID: "123", Links: Links{Download: tt.download}}
+			if got := attachmentDownloadURL(tt.baseURL, a); got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
