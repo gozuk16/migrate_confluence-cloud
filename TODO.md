@@ -128,3 +128,5 @@
   - [x] サブモジュールのポインタをテーマ main（d0a2134）に更新してコミット
   - [x] Storage Format リファレンスをコミット
   - [x] `hugo-site/content/SCRUM/` を .gitignore に追加
+  - [x] `.DS_Store` をリポジトリ全体で .gitignore に追加
+  - [x] PR作成・main へマージ

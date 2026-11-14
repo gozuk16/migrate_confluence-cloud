@@ -55,3 +55,6 @@ hugo-site/.hugo_build.lock
 
 # 移行ツールで実スペースから出力したコンテンツ（make sync-and-build で再生成する）
 hugo-site/content/SCRUM/
+
+# macOS が自動で作るファイル
+.DS_Store

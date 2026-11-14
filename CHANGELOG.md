@@ -6,6 +6,7 @@
 - テーマのサブモジュールのポインタを、gozuk16/hugo-theme-docs#9 のブランチ先頭からテーマ main のマージコミットに付け直した（内容は同じ）
 - 変換器の調査資料 `docs/confluence-storage-format-reference.md`（Storage Format の要素と Markdown 変換先の一覧）を追加した
 - 移行ツールが実スペースから出力した `hugo-site/content/SCRUM/` を .gitignore に追加した。`make sync-and-build` で再生成する
+- macOS が自動で作る `.DS_Store` をリポジトリ全体で .gitignore に追加した
 
 ### Added（ロードマッププランナーの再現）
 - Confluenceの「ロードマッププランナー」（roadmapマクロ）を、変換時に生成するSVGの図として再現できるようにした。従来は `<!-- macro: roadmap -->` というコメントになり何も表示されなかった
