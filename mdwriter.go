@@ -37,7 +37,7 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	// Markdown本文の生成
 	content, files, err := w.generateContent(page, spaceKey, spaceTitle, parentTitle, labels, comments, attachments)
 	if err != nil {
-		return fmt.Errorf("Markdownコンテンツ生成エラー: %w", err)
+		return fmt.Errorf("markdownコンテンツ生成エラー: %w", err)
 	}
 
 	// 本文が参照するファイル（ロードマップの SVG）を先に書き出す。
@@ -53,7 +53,7 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	// index.mdに書き出し
 	mdPath := filepath.Join(pageDir, "index.md")
 	if err := os.WriteFile(mdPath, []byte(content), 0644); err != nil {
-		return fmt.Errorf("Markdownファイル書き出しエラー: %w", err)
+		return fmt.Errorf("markdownファイル書き出しエラー: %w", err)
 	}
 
 	// 前回の変換で書き出し、今回は使わなくなったファイルを消す。
@@ -91,16 +91,16 @@ func (w *MDWriter) WriteFolder(folder *Folder, spaceKey, spaceTitle string) erro
 
 	var sb strings.Builder
 	sb.WriteString("+++\n")
-	sb.WriteString(fmt.Sprintf("title = %q\n", folder.Title))
-	sb.WriteString(fmt.Sprintf("space = %q\n", spaceKey))
+	fmt.Fprintf(&sb, "title = %q\n", folder.Title)
+	fmt.Fprintf(&sb, "space = %q\n", spaceKey)
 	if spaceTitle != "" {
-		sb.WriteString(fmt.Sprintf("space_title = %q\n", spaceTitle))
+		fmt.Fprintf(&sb, "space_title = %q\n", spaceTitle)
 	}
-	sb.WriteString(fmt.Sprintf("page_id = %q\n", folder.ID))
+	fmt.Fprintf(&sb, "page_id = %q\n", folder.ID)
 	if folder.ParentID != "" {
-		sb.WriteString(fmt.Sprintf("parent_id = %q\n", folder.ParentID))
+		fmt.Fprintf(&sb, "parent_id = %q\n", folder.ParentID)
 	}
-	sb.WriteString(fmt.Sprintf("weight = %d\n", frontMatterWeight(folder.Position)))
+	fmt.Fprintf(&sb, "weight = %d\n", frontMatterWeight(folder.Position))
 	sb.WriteString("is_folder = true\n")
 	sb.WriteString("[build]\n")
 	sb.WriteString("  render = \"never\"\n")
@@ -266,17 +266,17 @@ func (w *MDWriter) generateContent(page *Page, spaceKey, spaceTitle, parentTitle
 			// Depth>=1 のリプライは div でインデント
 			if depth > 0 {
 				marginLeft := depth * 2
-				sb.WriteString(fmt.Sprintf("<div style=\"margin-left: %dem\">\n\n", marginLeft))
+				fmt.Fprintf(&sb, "<div style=\"margin-left: %dem\">\n\n", marginLeft)
 			}
 
 			// 個別コメント見出しを HTML タグで出力（目次から除外）
-			sb.WriteString(fmt.Sprintf("<h%d>コメント %s</h%d>\n\n", headingLevel, label, headingLevel))
-			sb.WriteString(fmt.Sprintf("**投稿者:** %s  \n", authorName))
-			sb.WriteString(fmt.Sprintf("**日時:** %s\n\n", createdAt))
+			fmt.Fprintf(&sb, "<h%d>コメント %s</h%d>\n\n", headingLevel, label, headingLevel)
+			fmt.Fprintf(&sb, "**投稿者:** %s  \n", authorName)
+			fmt.Fprintf(&sb, "**日時:** %s\n\n", createdAt)
 
 			commentMarkdown, err := w.converter.Convert(comment.Body.Storage.Value)
 			if err != nil {
-				sb.WriteString(fmt.Sprintf("<!-- 変換エラー: %v -->\n", err))
+				fmt.Fprintf(&sb, "<!-- 変換エラー: %v -->\n", err)
 			} else {
 				sb.WriteString(commentMarkdown)
 				sb.WriteString("\n\n")
@@ -297,30 +297,30 @@ func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentT
 	var sb strings.Builder
 
 	sb.WriteString("+++\n")
-	sb.WriteString(fmt.Sprintf("title = %q\n", page.Title))
+	fmt.Fprintf(&sb, "title = %q\n", page.Title)
 
 	// 作成日時
 	if page.Version.CreatedAt != "" {
 		date := formatDateForFrontMatter(page.Version.CreatedAt)
-		sb.WriteString(fmt.Sprintf("date = %q\n", date))
-		sb.WriteString(fmt.Sprintf("lastmod = %q\n", date))
+		fmt.Fprintf(&sb, "date = %q\n", date)
+		fmt.Fprintf(&sb, "lastmod = %q\n", date)
 	}
 
-	sb.WriteString(fmt.Sprintf("space = %q\n", spaceKey))
+	fmt.Fprintf(&sb, "space = %q\n", spaceKey)
 	if spaceTitle != "" {
-		sb.WriteString(fmt.Sprintf("space_title = %q\n", spaceTitle))
+		fmt.Fprintf(&sb, "space_title = %q\n", spaceTitle)
 	}
-	sb.WriteString(fmt.Sprintf("page_id = %q\n", page.ID))
+	fmt.Fprintf(&sb, "page_id = %q\n", page.ID)
 
 	if parentTitle != "" {
-		sb.WriteString(fmt.Sprintf("parent = %q\n", parentTitle))
+		fmt.Fprintf(&sb, "parent = %q\n", parentTitle)
 	}
 
 	// 階層構造用: 親のID（ページ・フォルダ共通）とサイドバーの並び順
 	if page.ParentID != "" {
-		sb.WriteString(fmt.Sprintf("parent_id = %q\n", page.ParentID))
+		fmt.Fprintf(&sb, "parent_id = %q\n", page.ParentID)
 	}
-	sb.WriteString(fmt.Sprintf("weight = %d\n", frontMatterWeight(page.Position)))
+	fmt.Fprintf(&sb, "weight = %d\n", frontMatterWeight(page.Position))
 
 	// ラベル
 	if len(labels) > 0 {
@@ -328,19 +328,19 @@ func (w *MDWriter) generateFrontMatter(page *Page, spaceKey, spaceTitle, parentT
 		for _, l := range labels {
 			labelNames = append(labelNames, fmt.Sprintf("%q", l.Name))
 		}
-		sb.WriteString(fmt.Sprintf("labels = [%s]\n", strings.Join(labelNames, ", ")))
+		fmt.Fprintf(&sb, "labels = [%s]\n", strings.Join(labelNames, ", "))
 	}
 
 	// Confluence WebUI URL
 	if page.Links.WebUI != "" {
-		sb.WriteString(fmt.Sprintf("confluence_url = %q\n", page.Links.WebUI))
+		fmt.Fprintf(&sb, "confluence_url = %q\n", page.Links.WebUI)
 	}
 
 	// ページプロパティ（details マクロ）。TOML の配列テーブルなので必ず最後に書く
 	for _, p := range props {
 		sb.WriteString("[[properties]]\n")
-		sb.WriteString(fmt.Sprintf("  key = %q\n", p.Key))
-		sb.WriteString(fmt.Sprintf("  value = %q\n", p.Value))
+		fmt.Fprintf(&sb, "  key = %q\n", p.Key)
+		fmt.Fprintf(&sb, "  value = %q\n", p.Value)
 	}
 
 	sb.WriteString("+++\n")

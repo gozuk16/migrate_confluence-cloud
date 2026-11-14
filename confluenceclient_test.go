@@ -8,6 +8,14 @@ import (
 	"testing"
 )
 
+// writeJSON はテスト用サーバーのレスポンスに v を JSON で書き込む。
+// エンコードに失敗したら 500 を返し、クライアント側のテストを失敗させる
+func writeJSON(w http.ResponseWriter, v any) {
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		http.Error(w, "JSONエンコードエラー: "+err.Error(), http.StatusInternalServerError)
+	}
+}
+
 // newTestConfluenceClient はテスト用のConfluenceクライアントを作成する
 func newTestConfluenceClient(serverURL string) *ConfluenceClient {
 	return NewConfluenceClient(serverURL, "test@example.com", "test-token")
@@ -32,7 +40,7 @@ func TestGetPage(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(Page{
+				writeJSON(w, Page{
 					ID:      "12345",
 					Title:   "テストページ",
 					SpaceID: "67890",
@@ -113,7 +121,7 @@ func TestGetSpaceByKey(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(SpaceListResponse{
+				writeJSON(w, SpaceListResponse{
 					Results: []Space{
 						{
 							ID:   "67890",
@@ -133,7 +141,7 @@ func TestGetSpaceByKey(t *testing.T) {
 			spaceKey: "NOTFOUND",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(SpaceListResponse{
+				writeJSON(w, SpaceListResponse{
 					Results: []Space{},
 					Links:   Links{},
 				})
@@ -185,7 +193,7 @@ func TestGetPages(t *testing.T) {
 		cursor := r.URL.Query().Get("cursor")
 		if cursor == "" {
 			// 1ページ目
-			json.NewEncoder(w).Encode(PageListResponse{
+			writeJSON(w, PageListResponse{
 				Results: []Page{
 					{ID: "1", Title: "ページ1", SpaceID: "space1"},
 					{ID: "2", Title: "ページ2", SpaceID: "space1"},
@@ -194,7 +202,7 @@ func TestGetPages(t *testing.T) {
 			})
 		} else {
 			// 2ページ目（最終）
-			json.NewEncoder(w).Encode(PageListResponse{
+			writeJSON(w, PageListResponse{
 				Results: []Page{
 					{ID: "3", Title: "ページ3", SpaceID: "space1"},
 				},
@@ -229,7 +237,7 @@ func TestGetPageLabels(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(LabelListResponse{
+		writeJSON(w, LabelListResponse{
 			Results: []Label{
 				{ID: "1", Name: "golang", Prefix: "global"},
 				{ID: "2", Name: "backend", Prefix: "global"},
@@ -263,21 +271,21 @@ func TestGetPageFooterCommentsWithReplies(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case strings.Contains(r.URL.Path, "/pages/12345/footer-comments"):
-			json.NewEncoder(w).Encode(CommentListResponse{
+			writeJSON(w, CommentListResponse{
 				Results: []Comment{
 					{ID: "c001", Status: "current"},
 				},
 				Links: Links{},
 			})
 		case strings.Contains(r.URL.Path, "/footer-comments/c001/children"):
-			json.NewEncoder(w).Encode(CommentListResponse{
+			writeJSON(w, CommentListResponse{
 				Results: []Comment{
 					{ID: "c002", Status: "current"},
 				},
 				Links: Links{},
 			})
 		case strings.Contains(r.URL.Path, "/footer-comments/c002/children"):
-			json.NewEncoder(w).Encode(CommentListResponse{
+			writeJSON(w, CommentListResponse{
 				Results: []Comment{},
 				Links:   Links{},
 			})
