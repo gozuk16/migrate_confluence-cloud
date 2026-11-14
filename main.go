@@ -203,7 +203,9 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 	attachments, err := client.GetPageAttachments(pageID)
 	if err != nil {
 		slog.Warn("添付ファイル取得エラー", "pageID", pageID, "error", err)
-		attachments = []Attachment{}
+		// nil は「添付一覧が不明」を表す（buildAttachmentMap 参照）。
+		// 空のスライスにすると「添付 0 件」と扱われ、draw.io の図がリンクだけになってしまう
+		attachments = nil
 	}
 
 	// 親ページのタイトルを取得

@@ -445,3 +445,21 @@ func TestPageParentTypeAndPosition(t *testing.T) {
 
 // intPtr はテスト用に int のポインタを返す
 func intPtr(v int) *int { return &v }
+
+// TestGetPageAttachments_EmptyIsNotNil は添付 0 件のとき nil ではなく空のスライスを返すことのテスト。
+// nil は「添付一覧が不明」を表すため（buildAttachmentMap 参照）
+func TestGetPageAttachments_EmptyIsNotNil(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[],"_links":{}}`))
+	}))
+	defer server.Close()
+
+	got, err := newTestConfluenceClient(server.URL).GetPageAttachments("123")
+	if err != nil {
+		t.Fatalf("予期しないエラー: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %#v, want 空のスライス（非 nil）", got)
+	}
+}
