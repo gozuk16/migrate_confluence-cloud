@@ -6,10 +6,19 @@
 
 ## 未着手
 
-（なし）
+- [ ] 通常の画像（`renderMedia`）と添付ファイルセクションのリンク先も `markdownLinkDest` でエスケープする（空白・括弧・`#` を含むファイル名で壊れる）
+- [ ] 添付ファイルセクションで、箇条書きの直後の画像が前の項目に入ってしまう（空行が無い）表示崩れを直す
+- [ ] golangci-lint の既存の指摘 25 件（errcheck 16・staticcheck 9）を解消し `make lint` を通す
 
 ## 完了
 
+- [x] draw.io の図の移行（ブランチ: feature/drawio-macro）
+  - 原因: draw.io は Forge マクロ（extensionKey 末尾 `/static/drawio`・`/static/drawio-sketch`）で未対応のためコメント化。添付ダウンロードは v2 API の相対パスに `/wiki` が抜けて 404
+  - drawio.go: プレビュー画像 `<diagramName>.png` を埋め込み、元の図へリンク。プレビューが添付に無ければ警告してリンクのみ。段落内（inlineExtension）も対応
+  - downloader.go: attachmentDownloadURL で `/wiki` を補う
+  - 添付一覧の nil（不明）と 0 件を区別（buildAttachmentMap・GetPageAttachments）
+  - テスト追加（drawio_test.go・downloader_test.go）、サブエージェントでコードレビューし指摘を反映
+  - `--download-attachments` 付きで再移行し、localhost:1313 で 3 つの図の画像が 200 で返ることを確認
 - [x] Step 1: プロジェクト基盤セットアップ
 - [x] Step 2: 設定管理（config.go）
 - [x] Step 3: Confluence APIクライアント（confluenceclient.go）

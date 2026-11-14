@@ -389,9 +389,11 @@ func formatDateForFrontMatter(dateStr string) string {
 	return t.UTC().Format(time.RFC3339)
 }
 
-// buildAttachmentMap は添付ファイル一覧から UUID → ファイル名マップを構築する
+// buildAttachmentMap は添付ファイル一覧から UUID → ファイル名マップを構築する。
+// 添付一覧が不明（nil。中間ファイルからの convert）のときだけ nil を返し、
+// 取得できた一覧が 0 件のときは空の map を返す（draw.io のプレビュー画像の有無の判定に使う）
 func buildAttachmentMap(attachments []Attachment) map[string]string {
-	if len(attachments) == 0 {
+	if attachments == nil {
 		return nil
 	}
 	m := make(map[string]string, len(attachments))
