@@ -468,9 +468,7 @@ func renderAttachmentSection(attachments []Attachment) string {
 		}
 		inList = true
 	}
-	if len(blocks) == 0 {
-		return ""
-	}
+	// プレビュー画像を外しても、元の図ファイルは必ず残るので、一覧が空になることはない
 	return "\n## 添付ファイル\n\n" + strings.Join(blocks, "\n\n") + "\n"
 }
 
