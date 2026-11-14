@@ -604,6 +604,33 @@ func TestConvertADF_MediaFileWithMap(t *testing.T) {
 	}
 }
 
+// 添付画像のリンク先は保存時のファイル名（サニタイズ後）にし、空白・括弧・# をエンコードする
+func TestConvertADF_MediaFileEscaped(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		alt      string
+		want     string
+	}{
+		{"空白と括弧", "my photo (1).png", "photo", "![photo](my%20photo%20%281%29.png)"},
+		{"#", "図#2.png", "図", "![図](図%232.png)"},
+		{"サニタイズ", "a/b:c.png", "x", "![x](a_b_c.png)"},
+		{"代替テキストの角括弧", "p.png", "[案]", `![\[案\]](p.png)`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"file","id":"u1","alt":"` + tt.alt + `"}}]}`)
+			got, err := convertADF(adf, map[string]string{"u1": tt.filename})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestConvertADF_MediaFileUnknown(t *testing.T) {
 	adf := adfDoc(`{"type":"mediaSingle","content":[{"type":"media","attrs":{"type":"file","id":"unknown-uuid"}}]}`)
 	got, err := convertADF(adf, nil)

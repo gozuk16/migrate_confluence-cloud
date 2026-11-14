@@ -871,7 +871,7 @@ func (r *adfRenderer) renderMedia(node ADFNode) string {
 	}
 	alt := ""
 	if a, ok := node.Attrs["alt"].(string); ok {
-		alt = a
+		alt = escapeLinkText(a)
 	}
 	mediaType, _ := node.Attrs["type"].(string)
 	switch mediaType {
@@ -886,7 +886,8 @@ func (r *adfRenderer) renderMedia(node ADFNode) string {
 				filename = f
 			}
 		}
-		return "![" + alt + "](" + filename + ")"
+		// 添付はダウンロード時の保存名（サニタイズ後）で置かれるので、リンク先もそれに合わせる
+		return "![" + alt + "](" + markdownLinkDest(sanitizeFilename(filename)) + ")"
 	default:
 		return ""
 	}
