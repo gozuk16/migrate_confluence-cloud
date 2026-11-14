@@ -141,3 +141,29 @@ func drawioDownloadLink(title string) string {
 	href := html.EscapeString(markdownLinkDest(sanitizeFilename(title)))
 	return `<a href="` + href + `" download` + saveAs + `>` + html.EscapeString(title) + `</a>`
 }
+
+// isDrawioDraft は添付ファイルが draw.io の編集中の下書きかどうかを返す。
+// draw.io は図を編集している間、「~<図の名前>.tmp」や「~drawio~<アカウントID>~<図の名前>.tmp」という名前で
+// 図ファイル（mxfile）の下書きを添付する。保存後はゴミ箱に入るが、編集を中断すると残ることがある。
+// 普通の添付を誤って外さないよう、図ファイルであること・名前が ~ で始まること・.tmp で終わることのすべてを条件にする
+func isDrawioDraft(a Attachment) bool {
+	return a.MediaType == drawioMediaType &&
+		strings.HasPrefix(a.Title, "~") &&
+		strings.HasSuffix(strings.ToLower(a.Title), ".tmp")
+}
+
+// excludeDrawioDrafts は添付一覧から draw.io の編集中の下書きを外す。
+// 下書きはダウンロードせず、添付ファイル欄にも出さない。
+// 添付一覧が不明（nil）なら nil のまま返し、それ以外は空でも nil でないスライスを返す（buildAttachmentMap 参照）
+func excludeDrawioDrafts(attachments []Attachment) []Attachment {
+	if attachments == nil {
+		return nil
+	}
+	kept := make([]Attachment, 0, len(attachments))
+	for _, a := range attachments {
+		if !isDrawioDraft(a) {
+			kept = append(kept, a)
+		}
+	}
+	return kept
+}

@@ -214,6 +214,8 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 		// 空のスライスにすると「添付 0 件」と扱われ、draw.io の図がリンクだけになってしまう
 		attachments = nil
 	}
+	// draw.io の編集中の下書きは、ダウンロードも添付ファイル欄への表示もしない
+	attachments = excludeDrawioDrafts(attachments)
 
 	// 親ページのタイトルを取得
 	parentTitle := ""

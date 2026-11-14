@@ -269,3 +269,50 @@ func TestConvertADFPage_DrawioSVGSameDiagramTwice(t *testing.T) {
 		t.Errorf("calls = %v, files = %d, warnings = %q", calls, len(res.Files), res.Warnings)
 	}
 }
+
+// draw.io の編集中の下書き（~ で始まり .tmp で終わる mxfile）だけを添付一覧から外す
+func TestExcludeDrawioDrafts(t *testing.T) {
+	keep := []Attachment{
+		{Title: "test1.drawio", MediaType: drawioMediaType},
+		{Title: "test3", MediaType: drawioMediaType},
+		{Title: "test1.drawio.png", MediaType: "image/png"},
+		// 名前が下書きの形でも、図ファイルでなければ普通の添付として残す
+		{Title: "~メモ.drawio.tmp", MediaType: "text/plain"},
+		{Title: "~backup.tmp", MediaType: "application/octet-stream"},
+		// 図ファイルでも、~ で始まるだけ・.tmp で終わるだけのものは残す
+		{Title: "~案.drawio", MediaType: drawioMediaType},
+		{Title: "構成図.drawio.tmp", MediaType: drawioMediaType},
+		{Title: "a~b.drawio.tmp", MediaType: drawioMediaType},
+	}
+	drafts := []Attachment{
+		{Title: "~名称未設定ファイル-1794638497741.drawio.tmp", MediaType: drawioMediaType},
+		{Title: "~drawio~557058:6eed56ba~test1.drawio.tmp", MediaType: drawioMediaType},
+		// 拡張子の無い図（ボード）の下書き
+		{Title: "~test3.tmp", MediaType: drawioMediaType},
+		{Title: "~Test.DRAWIO.TMP", MediaType: drawioMediaType},
+	}
+	for _, a := range keep {
+		if isDrawioDraft(a) {
+			t.Errorf("%q（%s）は下書きとして扱わないこと", a.Title, a.MediaType)
+		}
+	}
+	for _, a := range drafts {
+		if !isDrawioDraft(a) {
+			t.Errorf("%q（%s）は下書きとして扱うこと", a.Title, a.MediaType)
+		}
+	}
+
+	// 順序を保って下書きだけを外す
+	mixed := []Attachment{keep[0], drafts[0], keep[1], drafts[1], keep[2]}
+	got := excludeDrawioDrafts(mixed)
+	if len(got) != 3 || got[0].Title != "test1.drawio" || got[1].Title != "test3" || got[2].Title != "test1.drawio.png" {
+		t.Errorf("got %+v", got)
+	}
+	// 添付一覧が不明（nil）なら nil のまま、全部が下書きでも空のスライス（非 nil）を返す（buildAttachmentMap 参照）
+	if got := excludeDrawioDrafts(nil); got != nil {
+		t.Errorf("excludeDrawioDrafts(nil) = %v, want nil", got)
+	}
+	if got := excludeDrawioDrafts(drafts[:1]); got == nil || len(got) != 0 {
+		t.Errorf("got %#v, want 空のスライス（非 nil）", got)
+	}
+}
