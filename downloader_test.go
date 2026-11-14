@@ -294,7 +294,7 @@ func TestDownloadAttachments_SetsModTime(t *testing.T) {
 		t.Fatal(err)
 	}
 	want, _ := time.Parse(time.RFC3339Nano, versionAt)
-	if diff := info.ModTime().Sub(want); diff < -time.Second || diff > time.Second {
+	if diff := info.ModTime().Sub(want).Abs(); diff > modTimeTolerance {
 		t.Errorf("更新日時が版の作成日時になっていません\n期待: %v\n実際: %v", want, info.ModTime())
 	}
 }
@@ -384,6 +384,13 @@ func TestDownloadAttachments_TruncatedBody(t *testing.T) {
 		if _, err := io.WriteString(w, "short"); err != nil {
 			t.Errorf("レスポンスの書き込みに失敗しました: %v", err)
 		}
+		// 送ってから切らないと、ヘッダーも届かずにリクエスト自体の失敗になる
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Error("レスポンスを途中で送れません")
+			return
+		}
+		flusher.Flush()
 		panic(http.ErrAbortHandler)
 	}))
 	defer server.Close()
@@ -401,8 +408,9 @@ func TestDownloadAttachments_TruncatedBody(t *testing.T) {
 		Version:  Version{Number: 3, CreatedAt: "2026-11-14T10:12:28.798Z"},
 		Links:    Links{Download: server.URL + "/download/diagram.drawio"},
 	}}
-	if _, err := NewDownloader("test@example.com", "token").DownloadAttachments(server.URL, attachments, tmpDir); err == nil {
-		t.Error("エラーが返りませんでした")
+	_, err := NewDownloader("test@example.com", "token").DownloadAttachments(server.URL, attachments, tmpDir)
+	if err == nil || !strings.Contains(err.Error(), "ファイルの書き込みに失敗しました") {
+		t.Errorf("書き込みの失敗のエラーが返りませんでした: %v", err)
 	}
 	assertOnlyFile(t, tmpDir, "diagram.drawio", "old-content")
 }
@@ -469,8 +477,9 @@ func TestSaveAttachment(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(destPath, "sub"), 0755); err != nil {
 			t.Fatal(err)
 		}
-		if err := saveAttachment(destPath, strings.NewReader("content"), 0, versionTime); err == nil {
-			t.Error("エラーが返りませんでした")
+		err := saveAttachment(destPath, strings.NewReader("content"), 0, versionTime)
+		if err == nil || !strings.Contains(err.Error(), "ファイルの保存に失敗しました") {
+			t.Errorf("保存の失敗のエラーが返りませんでした: %v", err)
 		}
 		entries, err := os.ReadDir(dir)
 		if err != nil {
