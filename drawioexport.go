@@ -78,8 +78,8 @@ func findDrawioCLI(configured string, lookPath func(string) (string, error), def
 // 画像は SVG の中に埋め込む（--embed-svg-images）。付けないと、図形ライブラリのアイコン（Azure・AWS など）が
 // draw.io のアプリの中のファイル（file:///…/app.asar/…）を指したままになり、ブラウザで表示できない。
 // 外部 URL の画像も取得して埋め込むが、取得できなかったものは URL のまま残る。
-// 図の中に応答の返らない URL の画像があると、draw.io が画像の読み込みを待ち続けて timeout で打ち切りになる
-// （実測で 1 件あたり約 75 秒。このオプションを付けなくても同じなので、付けずにやり直しても変換できない）
+// 図の中に、接続しても応答の返らない URL の画像があると、draw.io が画像の読み込みを待ち続けて時間切れになる
+// （そのような画像を 1 件含む図で、実測 76 秒。このオプションを付けなくても同じで、以前からの制限）
 // 添付ファイルは拡張子が無いことや、コマンドの引数として扱いにくい名前のことがあるので、一時フォルダに写してから変換する
 func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 	tmpDir, err := os.MkdirTemp("", "drawio-export-")
@@ -136,13 +136,14 @@ func inlineSVG(data []byte) ([]byte, error) {
 	return svg, nil
 }
 
-// localFileRefPattern は、SVG の属性（href・xlink:href・src）の値が file: で始まる箇所。
-// 警告を出すためのものなので、draw.io が書き出す形だけを拾う（CSS の url(…) や文字参照で書かれたものは拾わない）
-var localFileRefPattern = regexp.MustCompile(`(?i)(?:href|src)\s*=\s*["']\s*file:`)
+// localFileRefPattern は、SVG の画像の要素（image・img）で、参照先（href・xlink:href・src）が file: で始まる箇所。
+// 警告を出すためのものなので、draw.io が書き出す形だけを拾う（CSS の url(…) や文字参照で書かれたものは拾わない）。
+// 図形に付けたリンク（<a href="file:…">）は、画像の表示に関係しないので拾わない
+var localFileRefPattern = regexp.MustCompile(`(?is)<(?:image|img)\b[^>]*?(?:href|src)\s*=\s*["']\s*file:`)
 
-// countLocalFileRefs は、SVG の中の、ローカルのファイル（file://）への参照の数を返す。
+// countLocalFileRefs は、SVG の中の、ローカルのファイル（file://）を指す画像の数を返す。
 // ブラウザはサイトのページから file:// を読めないので、残っていればその画像は表示されない
-// （--embed-svg-images が効かない古い draw.io や、draw.io に無い図形ライブラリの画像で起こりうる）
+// （draw.io に無い図形ライブラリの画像を指す図で起こる。--embed-svg-images を扱えない古い draw.io でも起こりうる）
 func countLocalFileRefs(svg []byte) int {
 	return len(localFileRefPattern.FindAll(svg, -1))
 }

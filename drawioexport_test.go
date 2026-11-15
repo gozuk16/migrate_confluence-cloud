@@ -113,6 +113,8 @@ func TestCountLocalFileRefs(t *testing.T) {
 		{name: "href でも大文字でも数える",
 			svg: `<svg><image href="FILE:///a.png"/><image xlink:href='file:///b.png'/></svg>`, want: 2},
 		{name: "図の中の文字に書かれた file:// は数えない", svg: `<svg><text>file:///etc/hosts</text></svg>`, want: 0},
+		{name: "img 要素の src も数える", svg: `<svg><foreignObject><img src="file:///a.png"/></foreignObject></svg>`, want: 1},
+		{name: "図形に付けたリンクは数えない", svg: `<svg><a xlink:href="file://server/share/doc.pdf"><rect/></a></svg>`, want: 0},
 		{name: "空白があっても数える", svg: `<svg><image xlink:href = " file:///a.png"/></svg>`, want: 1},
 		{name: "CSS の url() は数えない（draw.io が書き出さない形）", svg: `<svg><rect style="fill:url(file:///a.png)"/></svg>`, want: 0},
 	}
