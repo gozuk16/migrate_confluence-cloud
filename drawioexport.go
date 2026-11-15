@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -10,13 +11,56 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
 
 // DrawioExporter は draw.io の図ファイル（.drawio）を、ページに直接埋め込める SVG に変換する
+// pageIndex は SVG にするページの番号（0 始まり）
 type DrawioExporter interface {
-	ExportSVG(srcPath string) ([]byte, error)
+	ExportSVG(srcPath string, pageIndex int) ([]byte, error)
+}
+
+// errDrawioPageNotFound は、マクロが指定するページを図ファイルから見つけられないことを表す
+// （そのページが無い、図ファイルを XML として読めない）。この場合は 1 ページ目を使う
+var errDrawioPageNotFound = errors.New("指定されたページが図ファイルに見つかりません")
+
+// drawioPageIndex は図ファイルの中で、ID が pageID のページ（<diagram id="…">）の番号（0 始まり）を返す。
+// そのページが無いときと、図ファイルを XML として読めないときは、errDrawioPageNotFound を返す
+// （読めない図ファイルでも draw.io は変換できることがあるので、1 ページ目の変換は試す）。
+// ページの中身（圧縮されていることがある）は読まず、<diagram> の並び順だけを数える
+func drawioPageIndex(srcPath, pageID string) (int, error) {
+	f, err := os.Open(srcPath)
+	if err != nil {
+		return 0, fmt.Errorf("図ファイルを読めません: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	dec := xml.NewDecoder(f)
+	index := 0
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			return 0, errDrawioPageNotFound
+		}
+		if err != nil {
+			return 0, fmt.Errorf("%w（図ファイルを解析できません: %v）", errDrawioPageNotFound, err)
+		}
+		start, ok := tok.(xml.StartElement)
+		if !ok || start.Name.Local != "diagram" {
+			continue
+		}
+		for _, attr := range start.Attr {
+			if attr.Name.Local == "id" && attr.Value == pageID {
+				return index, nil
+			}
+		}
+		index++
+		// ページの中身は読み飛ばす
+		if err := dec.Skip(); err != nil {
+			return 0, fmt.Errorf("%w（図ファイルを解析できません: %v）", errDrawioPageNotFound, err)
+		}
+	}
 }
 
 // drawioCLINames は PATH から探す draw.io デスクトップ版のコマンド名
@@ -72,7 +116,9 @@ func findDrawioCLI(configured string, lookPath func(string) (string, error), def
 	return "", errors.New("draw.io デスクトップ版のコマンドが見つかりません（インストールするか、設定の drawio.cli_path で場所を指定してください）")
 }
 
-// ExportSVG は図ファイルの 1 ページ目を SVG に変換する。
+// ExportSVG は図ファイルの pageIndex 番目（0 始まり）のページを SVG に変換する。
+// draw.io のコマンドは、ページの数以上の番号を渡すとエラーにせず最後のページを書き出すので、
+// 番号は図ファイルにあるページのものを渡すこと（drawioPageIndex で求める）。
 // 明るい配色に固定し（--svg-theme light。既定の auto は OS のダークモードで線と文字が白くなる）、
 // フォントは埋め込まない（--embed-svg-fonts false。文字をそのまま残し、外部のフォントも取りに行かない）。
 // 画像は SVG の中に埋め込む（--embed-svg-images）。付けないと、図形ライブラリのアイコン（Azure・AWS など）が
@@ -81,7 +127,7 @@ func findDrawioCLI(configured string, lookPath func(string) (string, error), def
 // 図の中に、接続しても応答の返らない URL の画像があると、draw.io が画像の読み込みを待ち続けて時間切れになる
 // （そのような画像を 1 件含む図で、実測 76 秒。このオプションを付けなくても同じで、以前からの制限）
 // 添付ファイルは拡張子が無いことや、コマンドの引数として扱いにくい名前のことがあるので、一時フォルダに写してから変換する
-func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
+func (c *DrawioCLI) ExportSVG(srcPath string, pageIndex int) ([]byte, error) {
 	tmpDir, err := os.MkdirTemp("", "drawio-export-")
 	if err != nil {
 		return nil, fmt.Errorf("一時フォルダの作成に失敗しました: %w", err)
@@ -96,7 +142,8 @@ func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.path, "-x", "-f", "svg", "--svg-theme", "light", "--embed-svg-fonts", "false", "--embed-svg-images", "-o", out, in)
+	cmd := exec.CommandContext(ctx, c.path, "-x", "-f", "svg", "--svg-theme", "light", "--embed-svg-fonts", "false", "--embed-svg-images",
+		"--page-index", strconv.Itoa(pageIndex), "-o", out, in)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	// draw.io は Electron で、打ち切ったあとも補助プロセスがエラー出力を握ったまま残ることがある。

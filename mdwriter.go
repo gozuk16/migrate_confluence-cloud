@@ -43,7 +43,7 @@ func (w *MDWriter) drawioSVGFunc(spaceKey, pageTitle string) drawioSVGFunc {
 		base = w.outputDir
 	}
 	dir := filepath.Join(base, spaceKey, sanitizeFilename(pageTitle))
-	return func(diagramName string) ([]byte, error) {
+	return func(diagramName, pageID string) ([]byte, error) {
 		if w.drawio == nil {
 			if w.drawioErr != nil {
 				return nil, w.drawioErr
@@ -54,7 +54,14 @@ func (w *MDWriter) drawioSVGFunc(spaceKey, pageTitle string) drawioSVGFunc {
 		if _, err := os.Stat(src); err != nil {
 			return nil, errors.New("図ファイルが保存されていません（--download-attachments を付けて移行してください）")
 		}
-		return w.drawio.ExportSVG(src)
+		pageIndex := 0
+		if pageID != "" {
+			var err error
+			if pageIndex, err = drawioPageIndex(src, pageID); err != nil {
+				return nil, err
+			}
+		}
+		return w.drawio.ExportSVG(src, pageIndex)
 	}
 }
 
