@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -167,7 +168,7 @@ func TestConvertADFPage_DrawioSVG(t *testing.T) {
 	var asked []string
 	opts := adfOptions{
 		attachmentMap: map[string]string{"a1": "test1.drawio", "a2": "test1.drawio.png", "a3": "a/b \"x\""},
-		drawioSVG: func(name string) ([]byte, error) {
+		drawioSVG: func(name, _ string) ([]byte, error) {
 			asked = append(asked, name)
 			return []byte("<svg>" + name + "</svg>"), nil
 		},
@@ -199,7 +200,7 @@ func TestConvertADFPage_DrawioSVG(t *testing.T) {
 func TestConvertADFPage_DrawioSVGFallback(t *testing.T) {
 	opts := adfOptions{
 		attachmentMap: map[string]string{"a1": "ng.drawio", "a2": "ng.drawio.png", "a3": "ok.drawio"},
-		drawioSVG: func(name string) ([]byte, error) {
+		drawioSVG: func(name, _ string) ([]byte, error) {
 			if name == "ng.drawio" {
 				return nil, errors.New("変換に失敗")
 			}
@@ -244,7 +245,7 @@ func TestDrawioDownloadLink(t *testing.T) {
 // 同じ図を何度も埋め込んでいても、変換と警告は 1 回だけで、同じ SVG を使う
 func TestConvertADFPage_DrawioSVGSameDiagramTwice(t *testing.T) {
 	calls := map[string]int{}
-	opts := adfOptions{drawioSVG: func(name string) ([]byte, error) {
+	opts := adfOptions{drawioSVG: func(name, _ string) ([]byte, error) {
 		calls[name]++
 		if name == "ng.drawio" {
 			return nil, errors.New("失敗")
@@ -329,10 +330,10 @@ func TestDrawioSVGFile_LocalFileRefWarning(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := &adfRenderer{drawioSVG: func(string) ([]byte, error) { return []byte(tt.svg), nil }}
+			r := &adfRenderer{drawioSVG: func(string, string) ([]byte, error) { return []byte(tt.svg), nil }}
 			// 同じ図を 2 回埋め込んでも、警告は 1 回だけ
 			for i := 0; i < 2; i++ {
-				if got := r.drawioSVGFile("図.drawio"); got != "confluence-drawio-1.svg" {
+				if got, _ := r.drawioSVGFile("図.drawio", ""); got != "confluence-drawio-1.svg" {
 					t.Errorf("drawioSVGFile() = %q, want confluence-drawio-1.svg", got)
 				}
 			}
@@ -347,5 +348,121 @@ func TestDrawioSVGFile_LocalFileRefWarning(t *testing.T) {
 				t.Errorf("警告が出ました: %v", r.warnings)
 			}
 		})
+	}
+}
+
+// マクロがページを指定していれば（aspect の先頭）、そのページを SVG にして、拡大表示にもページを渡す
+func TestConvertADFPage_DrawioPage(t *testing.T) {
+	var asked []string
+	opts := adfOptions{drawioSVG: func(name, pageID string) ([]byte, error) {
+		asked = append(asked, name+"#"+pageID)
+		if pageID == "gone" {
+			return nil, fmt.Errorf("確認: %w", errDrawioPageNotFound)
+		}
+		return []byte("<svg>" + pageID + "</svg>"), nil
+	}}
+	adf := adfDoc(strings.Join([]string{
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"pg2 1 L2","aspectHash":"abc"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"pg2 1"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"gone 1"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"gone 1"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"pg3"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"undefined"}`),
+		drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"  "}`),
+	}, ","))
+	res, err := convertADFPageWith(adf, opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	page2 := `{{< drawio src="confluence-drawio-1.svg" file="d.drawio" page="pg2" title="d.drawio" >}}`
+	first := `{{< drawio src="confluence-drawio-2.svg" file="d.drawio" title="d.drawio" >}}`
+	page3 := `{{< drawio src="confluence-drawio-3.svg" file="d.drawio" page="pg3" title="d.drawio" >}}`
+	// レイヤーの指定だけが違う図は同じ SVG を使う。無いページの指定は 1 ページ目にする
+	want := strings.Join([]string{page2, first, page2, first, first, page3, first, first}, "\n\n")
+	if res.Markdown != want {
+		t.Errorf("got  %q\nwant %q", res.Markdown, want)
+	}
+	if got, want := strings.Join(asked, " "), "d.drawio#pg2 d.drawio# d.drawio#gone d.drawio#pg3"; got != want {
+		t.Errorf("SVG にした図 = %q, want %q", got, want)
+	}
+	if len(res.Files) != 3 || string(res.Files[0].Data) != "<svg>pg2</svg>" || string(res.Files[1].Data) != "<svg></svg>" ||
+		string(res.Files[2].Data) != "<svg>pg3</svg>" {
+		t.Errorf("files = %+v", res.Files)
+	}
+	if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "ページ（gone）の代わりに 1 ページ目を使います: 確認: "+errDrawioPageNotFound.Error()) {
+		t.Errorf("warnings = %q, want 無いページの警告を 1 件", res.Warnings)
+	}
+}
+
+// 無いページを指定した図が先にあっても、1 ページ目の SVG を作って使う
+func TestConvertADFPage_DrawioPageNotFoundFirst(t *testing.T) {
+	opts := adfOptions{drawioSVG: func(_, pageID string) ([]byte, error) {
+		if pageID != "" {
+			return nil, errDrawioPageNotFound
+		}
+		return []byte("<svg/>"), nil
+	}}
+	res, err := convertADFPageWith(adfDoc(drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"gone 1"}`)), opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := `{{< drawio src="confluence-drawio-1.svg" file="d.drawio" title="d.drawio" >}}`; res.Markdown != want {
+		t.Errorf("got %q, want %q", res.Markdown, want)
+	}
+	if len(res.Files) != 1 || len(res.Warnings) != 1 {
+		t.Errorf("files = %d 件, warnings = %q", len(res.Files), res.Warnings)
+	}
+}
+
+// PNG の表示に戻すとき、ページを指定した図は、そのページのプレビュー画像（<図の名前>-<aspectHash>.png）があれば使う
+func TestConvertADFPage_DrawioPagePreview(t *testing.T) {
+	tests := []struct {
+		name        string
+		guestParams string
+		attachments map[string]string
+		want        string
+	}{
+		{"ページのプレビューがある", `{"diagramName":"d.drawio","aspect":"pg2 1","aspectHash":"abc"}`,
+			map[string]string{"a": "d.drawio", "b": "d.drawio.png", "c": "d.drawio-abc.png"}, "[![d.drawio](d.drawio-abc.png)](d.drawio)"},
+		{"ページのプレビューが無い", `{"diagramName":"d.drawio","aspect":"pg2 1","aspectHash":"abc"}`,
+			map[string]string{"a": "d.drawio", "b": "d.drawio.png"}, "[![d.drawio](d.drawio.png)](d.drawio)"},
+		{"ページの指定が無い", `{"diagramName":"d.drawio","aspectHash":"abc"}`,
+			map[string]string{"a": "d.drawio", "b": "d.drawio.png", "c": "d.drawio-abc.png"}, "[![d.drawio](d.drawio.png)](d.drawio)"},
+		{"添付一覧が不明", `{"diagramName":"d.drawio","aspect":"pg2 1","aspectHash":"abc"}`, nil, "[![d.drawio](d.drawio.png)](d.drawio)"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := convertADF(adfDoc(drawioExtension("drawio", tt.guestParams)), tt.attachments)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// 指定のページが図ファイルに無く、1 ページ目も SVG にできないときは、1 ページ目のプレビュー画像に戻す
+func TestConvertADFPage_DrawioPageNotFoundPNG(t *testing.T) {
+	opts := adfOptions{
+		attachmentMap: map[string]string{"a": "d.drawio", "b": "d.drawio.png", "c": "d.drawio-abc.png"},
+		drawioSVG: func(_, pageID string) ([]byte, error) {
+			if pageID != "" {
+				return nil, errDrawioPageNotFound
+			}
+			return nil, errors.New("失敗")
+		},
+	}
+	res, err := convertADFPageWith(adfDoc(drawioExtension("drawio", `{"diagramName":"d.drawio","aspect":"gone 1","aspectHash":"abc"}`)), opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := "[![d.drawio](d.drawio.png)](d.drawio)"; res.Markdown != want {
+		t.Errorf("got %q, want %q", res.Markdown, want)
+	}
+	if len(res.Warnings) != 2 {
+		t.Errorf("warnings = %q, want 2 件（無いページ、SVG にできない）", res.Warnings)
 	}
 }

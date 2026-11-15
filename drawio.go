@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"strings"
@@ -52,15 +53,26 @@ func (r *adfRenderer) renderDrawio(node ADFNode) string {
 	if alt == "" {
 		alt = name
 	}
-	if svg := r.drawioSVGFile(name); svg != "" {
+	pageID := drawioAspectPage(guest)
+	if svg, page := r.drawioSVGFile(name, pageID); svg != "" {
+		pageParam := ""
+		if page != "" {
+			pageParam = " page=" + quoteShortcodeParam(page)
+		}
 		return "{{< drawio src=" + quoteShortcodeParam(svg) + " file=" + quoteShortcodeParam(sanitizeFilename(name)) +
-			" title=" + quoteShortcodeParam(alt) + " >}}"
+			pageParam + " title=" + quoteShortcodeParam(alt) + " >}}"
 	}
 	alt = escapeLinkText(alt)
 
 	// 添付ファイルはサニタイズした名前で保存されるので、リンク先もそれに合わせる
 	diagram := markdownLinkDest(sanitizeFilename(name))
 	preview := name + ".png"
+	// ページを指定した図には、そのページのプレビュー画像（<図の名前>-<aspectHash>.png）が添付されていることがある
+	// （指定のページが図ファイルに無かったときは、1 ページ目のプレビュー画像を使う）
+	missing := r.drawioFiles[drawioFileKey(name, pageID)].pageMissing
+	if hash, _ := guest["aspectHash"].(string); pageID != "" && !missing && hash != "" && hasAttachmentTitle(r.attachmentMap, name+"-"+hash+".png") {
+		preview = name + "-" + hash + ".png"
+	}
 	if r.attachmentMap != nil && !hasAttachmentTitle(r.attachmentMap, preview) {
 		r.warnings = append(r.warnings, "draw.io: プレビュー画像 "+preview+" が添付ファイルに無いため、図へのリンクだけを出力しました")
 		return "[" + alt + "](" + diagram + ")"
@@ -68,25 +80,60 @@ func (r *adfRenderer) renderDrawio(node ADFNode) string {
 	return "[![" + alt + "](" + markdownLinkDest(sanitizeFilename(preview)) + ")](" + diagram + ")"
 }
 
-// drawioSVGFile は図を SVG にして、本文と一緒に書き出すファイルに加え、そのファイル名を返す。
-// SVG にしない設定のとき（drawioSVG が nil）は何もせず空文字を返す。SVG にできなかったときは警告を記録して空文字を返す。
-// SVG に file:// の画像が残っているときは、警告を記録したうえで SVG を使う（その画像のほかは表示できるため）。
-// 同じ図をページ内で何度も埋め込んでいても、変換と警告は 1 回だけにして同じファイルを使う
-func (r *adfRenderer) drawioSVGFile(diagramName string) string {
-	if r.drawioSVG == nil {
+// drawioFile は SVG にした draw.io の図
+type drawioFile struct {
+	name string // 書き出すファイル名。SVG にできなかった図は空文字
+	page string // SVG にしたページの ID。1 ページ目を SVG にしたとき（指定が無い、指定のページが無い）は空文字
+	// 指定のページを図ファイルから見つけられず、1 ページ目を使ったか
+	pageMissing bool
+}
+
+// drawioFileKey は drawioFiles のキー（図の名前とページの ID）を返す
+func drawioFileKey(diagramName, pageID string) string {
+	return diagramName + "\x00" + pageID
+}
+
+// drawioAspectPage は、マクロが表示するページを指定していれば、そのページの ID（図ファイルの <diagram id="…">）を返す。
+// 指定していなければ空文字を返す。
+// マクロの aspect は「<ページの ID> <表示するレイヤーの ID> …」という空白区切りの文字列で、先頭がページの ID。
+// レイヤーの指定は使わない（どのレイヤーも図ファイルに保存された表示・非表示のまま描く）
+func drawioAspectPage(guest map[string]any) string {
+	aspect, _ := guest["aspect"].(string)
+	fields := strings.Fields(aspect)
+	if len(fields) == 0 || fields[0] == "undefined" || fields[0] == "null" {
 		return ""
 	}
-	if name, done := r.drawioFiles[diagramName]; done {
-		return name
+	return fields[0]
+}
+
+// drawioSVGFile は図を SVG にして、本文と一緒に書き出すファイルに加え、そのファイル名と、SVG にしたページの ID を返す。
+// SVG にしない設定のとき（drawioSVG が nil）は何もせず空文字を返す。SVG にできなかったときは警告を記録して空文字を返す。
+// pageID のページを図ファイルから見つけられないときは、警告を記録して 1 ページ目を SVG にし、ページの ID は空文字を返す。
+// SVG に file:// の画像が残っているときは、警告を記録したうえで SVG を使う（その画像のほかは表示できるため）。
+// 同じ図の同じページをページ内で何度も埋め込んでいても、変換と警告は 1 回だけにして同じファイルを使う
+func (r *adfRenderer) drawioSVGFile(diagramName, pageID string) (file, page string) {
+	if r.drawioSVG == nil {
+		return "", ""
+	}
+	key := drawioFileKey(diagramName, pageID)
+	if f, done := r.drawioFiles[key]; done {
+		return f.name, f.page
 	}
 	if r.drawioFiles == nil {
-		r.drawioFiles = map[string]string{}
+		r.drawioFiles = map[string]drawioFile{}
 	}
-	data, err := r.drawioSVG(diagramName)
+	data, err := r.drawioSVG(diagramName, pageID)
+	if pageID != "" && errors.Is(err, errDrawioPageNotFound) {
+		r.warnings = append(r.warnings, "draw.io: "+diagramName+" の、マクロが指定するページ（"+pageID+"）の代わりに 1 ページ目を使います: "+err.Error())
+		// 1 ページ目として変換する（すでに変換していればそれを使う）
+		file, _ = r.drawioSVGFile(diagramName, "")
+		r.drawioFiles[key] = drawioFile{name: file, pageMissing: true}
+		return file, ""
+	}
 	if err != nil {
 		r.warnings = append(r.warnings, "draw.io: "+diagramName+" を SVG にできないため PNG で表示します: "+err.Error())
-		r.drawioFiles[diagramName] = ""
-		return ""
+		r.drawioFiles[key] = drawioFile{}
+		return "", ""
 	}
 	if n := countLocalFileRefs(data); n > 0 {
 		r.warnings = append(r.warnings, fmt.Sprintf(
@@ -95,8 +142,8 @@ func (r *adfRenderer) drawioSVGFile(diagramName string) string {
 	}
 	name := fmt.Sprintf("%s%d.svg", drawioFilePrefix, len(r.files)-countNonDrawioFiles(r.files)+1)
 	r.files = append(r.files, PageFile{Name: name, Data: data})
-	r.drawioFiles[diagramName] = name
-	return name
+	r.drawioFiles[key] = drawioFile{name: name, page: pageID}
+	return name, pageID
 }
 
 // countNonDrawioFiles は書き出し予定のファイルのうち、draw.io の SVG 以外の数を返す

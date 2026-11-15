@@ -153,7 +153,7 @@ func TestDrawioCLI_ExportSVG(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := (&DrawioCLI{path: cli, timeout: drawioExportTimeout, waitDelay: drawioWaitDelay}).ExportSVG(src)
+	got, err := (&DrawioCLI{path: cli, timeout: drawioExportTimeout, waitDelay: drawioWaitDelay}).ExportSVG(src, 2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -164,7 +164,7 @@ func TestDrawioCLI_ExportSVG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"-x -f svg", "--svg-theme light", "--embed-svg-fonts false", "--embed-svg-images", "diagram.drawio"} {
+	for _, want := range []string{"-x -f svg", "--svg-theme light", "--embed-svg-fonts false", "--embed-svg-images", "--page-index 2", "diagram.drawio"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("args = %q, want %q を含む", args, want)
 		}
@@ -190,7 +190,7 @@ func TestDrawioCLI_ExportSVG_Errors(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cli, _ := fakeDrawioCLI(t, tt.script)
-			_, err := (&DrawioCLI{path: cli, timeout: drawioExportTimeout, waitDelay: drawioWaitDelay}).ExportSVG(tt.src)
+			_, err := (&DrawioCLI{path: cli, timeout: drawioExportTimeout, waitDelay: drawioWaitDelay}).ExportSVG(tt.src, 0)
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("err = %v, want %q を含むエラー", err, tt.wantErr)
 			}
@@ -207,11 +207,57 @@ sleep 30`)
 		t.Fatal(err)
 	}
 	start := time.Now()
-	_, err := (&DrawioCLI{path: cli, timeout: 300 * time.Millisecond, waitDelay: 300 * time.Millisecond}).ExportSVG(src)
+	_, err := (&DrawioCLI{path: cli, timeout: 300 * time.Millisecond, waitDelay: 300 * time.Millisecond}).ExportSVG(src, 0)
 	if err == nil || !strings.Contains(err.Error(), "終わりませんでした") {
 		t.Errorf("err = %v, want 打ち切りのエラー", err)
 	}
 	if elapsed := time.Since(start); elapsed > 10*time.Second {
 		t.Errorf("打ち切りに %s かかりました", elapsed)
+	}
+}
+
+func TestDrawioPageIndex(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	// 2 ページ目は中身が圧縮された形。ページの中の要素の id は拾わない
+	multi := write("multi", `<mxfile host="x"><diagram id="pg1" name="1"><mxGraphModel><root><mxCell id="0"/><mxCell id="pg3x"/></root></mxGraphModel></diagram>`+
+		`<diagram name="2" id="pg2">7VhLc9owEP41</diagram><diagram id="pg3" name="3"><mxGraphModel/></diagram></mxfile>`)
+	tests := []struct {
+		name    string
+		src     string
+		pageID  string
+		want    int
+		wantErr string
+	}{
+		{name: "1 ページ目", src: multi, pageID: "pg1", want: 0},
+		{name: "2 ページ目", src: multi, pageID: "pg2", want: 1},
+		{name: "3 ページ目", src: multi, pageID: "pg3", want: 2},
+		{name: "無いページ", src: multi, pageID: "gone", wantErr: errDrawioPageNotFound.Error()},
+		{name: "ページの中の要素の id", src: multi, pageID: "pg3x", wantErr: errDrawioPageNotFound.Error()},
+		{name: "図ファイルが無い", src: filepath.Join(dir, "none"), pageID: "pg1", wantErr: "図ファイルを読めません"},
+		{name: "XML でない", src: write("broken", `<mxfile><diagram id="a"></mxfile>`), pageID: "pg1", wantErr: errDrawioPageNotFound.Error() + "（図ファイルを解析できません"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := drawioPageIndex(tt.src, tt.pageID)
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want %q を含むエラー", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || got != tt.want {
+				t.Errorf("drawioPageIndex() = %d, %v, want %d", got, err, tt.want)
+			}
+		})
+	}
+	if _, err := drawioPageIndex(multi, "gone"); !errors.Is(err, errDrawioPageNotFound) {
+		t.Errorf("err = %v, want errDrawioPageNotFound", err)
 	}
 }

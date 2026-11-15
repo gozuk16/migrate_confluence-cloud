@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -854,7 +855,7 @@ func TestRenderAttachmentSection(t *testing.T) {
 // stubDrawioExporter はテスト用の DrawioExporter。図ファイルの内容を SVG の中に写す
 type stubDrawioExporter struct{ err error }
 
-func (e stubDrawioExporter) ExportSVG(srcPath string) ([]byte, error) {
+func (e stubDrawioExporter) ExportSVG(srcPath string, pageIndex int) ([]byte, error) {
 	if e.err != nil {
 		return nil, e.err
 	}
@@ -862,7 +863,11 @@ func (e stubDrawioExporter) ExportSVG(srcPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return []byte("<svg>" + string(data) + "</svg>"), nil
+	page := ""
+	if pageIndex != 0 {
+		page = fmt.Sprintf(` data-page="%d"`, pageIndex)
+	}
+	return []byte("<svg" + page + ">" + string(data) + "</svg>"), nil
 }
 
 func drawioTestPage() *Page {
@@ -1016,5 +1021,31 @@ func TestRenderAttachmentSection_Drawio(t *testing.T) {
 	hidden := []Attachment{{Title: "a.png", MediaType: "image/png"}, {Title: "a", MediaType: drawioMediaType}}
 	if got := renderAttachmentSection(hidden); got != "\n## 添付ファイル\n\n"+`- <a href="a" download="a.drawio">a</a>`+"\n" {
 		t.Errorf("got %q", got)
+	}
+}
+
+// ページを指定した図は、図ファイルの中のページの番号を調べて draw.io に渡す。無いページはエラーで知らせる
+func TestMDWriter_DrawioSVGFuncPage(t *testing.T) {
+	tmpDir := t.TempDir()
+	attDir := filepath.Join(tmpDir, "TEST", "p")
+	if err := os.MkdirAll(attDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	body := `<mxfile><diagram id="pg1"/><diagram id="pg2"/></mxfile>`
+	if err := os.WriteFile(filepath.Join(attDir, "d.drawio"), []byte(body), 0644); err != nil {
+		t.Fatal(err)
+	}
+	writer := newTestMDWriter(tmpDir)
+	writer.SetDrawioExporter(stubDrawioExporter{}, nil, "")
+	toSVG := writer.drawioSVGFunc("TEST", "p")
+
+	if got, err := toSVG("d.drawio", "pg2"); err != nil || string(got) != `<svg data-page="1">`+body+`</svg>` {
+		t.Errorf("pg2: got %q, %v", got, err)
+	}
+	if got, err := toSVG("d.drawio", ""); err != nil || string(got) != `<svg>`+body+`</svg>` {
+		t.Errorf("指定なし: got %q, %v", got, err)
+	}
+	if _, err := toSVG("d.drawio", "gone"); !errors.Is(err, errDrawioPageNotFound) {
+		t.Errorf("無いページ: err = %v, want errDrawioPageNotFound", err)
 	}
 }

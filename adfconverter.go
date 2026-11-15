@@ -28,17 +28,19 @@ type ADFMark struct {
 
 // adfRenderer は ADF ノードツリーを Markdown に変換する
 type adfRenderer struct {
-	attachmentMap map[string]string // media UUID → ファイル名
-	properties    []PageProperty    // details マクロから集めたページプロパティ（出現順）
-	seenProps     map[string]bool   // 収集済みの項目名
-	warnings      []string          // 変換時の警告（呼び出し側がログに出す）
-	files         []PageFile        // 本文と一緒にページのフォルダへ書き出すファイル（ロードマップの SVG など）
-	drawioSVG     drawioSVGFunc     // draw.io の図を SVG にする。nil なら SVG にせず PNG で表示する
-	drawioFiles   map[string]string // SVG にした draw.io の図の名前 → 書き出すファイル名（SVG にできなかった図は空文字）
+	attachmentMap map[string]string     // media UUID → ファイル名
+	properties    []PageProperty        // details マクロから集めたページプロパティ（出現順）
+	seenProps     map[string]bool       // 収集済みの項目名
+	warnings      []string              // 変換時の警告（呼び出し側がログに出す）
+	files         []PageFile            // 本文と一緒にページのフォルダへ書き出すファイル（ロードマップの SVG など）
+	drawioSVG     drawioSVGFunc         // draw.io の図を SVG にする。nil なら SVG にせず PNG で表示する
+	drawioFiles   map[string]drawioFile // SVG にした draw.io の図（名前とページの ID）→ 書き出すファイル
 }
 
-// drawioSVGFunc は draw.io の図（添付ファイル名）を、ページに直接埋め込める SVG にして返す
-type drawioSVGFunc func(diagramName string) ([]byte, error)
+// drawioSVGFunc は draw.io の図（添付ファイル名）を、ページに直接埋め込める SVG にして返す。
+// pageID は SVG にする図のページの ID（図ファイルの <diagram id="…">）。空なら 1 ページ目。
+// 図ファイルにそのページが無いときは errDrawioPageNotFound を返す
+type drawioSVGFunc func(diagramName, pageID string) ([]byte, error)
 
 // adfOptions は ADF の変換に渡す、ページごとの情報
 type adfOptions struct {
