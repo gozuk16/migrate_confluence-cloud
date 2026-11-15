@@ -197,32 +197,6 @@ func TestDrawioCLI_ExportSVG_Errors(t *testing.T) {
 }
 
 // 変換が終わらないときは打ち切る。コマンドが残した子プロセスが出力を握っていても戻ってくる
-// 画像を埋め込む変換が時間内に終わらなければ、埋め込まずにやり直す
-func TestDrawioCLI_ExportSVG_RetryWithoutEmbed(t *testing.T) {
-	// 画像を埋め込むときだけ終わらないコマンド（応答の返らない URL の画像がある図）
-	cli, argsFile := fakeDrawioCLI(t, `if grep -q -- --embed-svg-images "$(dirname "$0")/args.txt"; then sleep 30; fi
-echo '<svg data-retry="1"></svg>' > "$out"`)
-	src := filepath.Join(t.TempDir(), "a.drawio")
-	if err := os.WriteFile(src, []byte("x"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	got, err := (&DrawioCLI{path: cli, timeout: 500 * time.Millisecond, waitDelay: 300 * time.Millisecond}).ExportSVG(src)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if want := `<svg data-retry="1"></svg>`; string(got) != want {
-		t.Errorf("got %q, want %q", got, want)
-	}
-	args, err := os.ReadFile(argsFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(args), "--embed-svg-images") || !strings.Contains(string(args), "-x -f svg") {
-		t.Errorf("やり直しの引数が期待と異なります: %q", args)
-	}
-}
-
-// やり直しても終わらなければ、打ち切りのエラーを返す
 func TestDrawioCLI_ExportSVG_Timeout(t *testing.T) {
 	cli, _ := fakeDrawioCLI(t, `sleep 30 &
 sleep 30`)

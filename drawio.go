@@ -91,8 +91,7 @@ func (r *adfRenderer) drawioSVGFile(diagramName string) string {
 	if n := countLocalFileRefs(data); n > 0 {
 		r.warnings = append(r.warnings, fmt.Sprintf(
 			"draw.io: %s の SVG に、ローカルのファイル（file://）への参照が %d 件残っています。その画像はブラウザでは表示されません"+
-				"（draw.io デスクトップ版が古い、draw.io に無い図形ライブラリの画像を指している、"+
-				"時間切れで画像を埋め込めなかった、のいずれかの可能性があります）", diagramName, n))
+				"（draw.io デスクトップ版が古いか、draw.io に無い図形ライブラリの画像を指している可能性があります）", diagramName, n))
 	}
 	name := fmt.Sprintf("%s%d.svg", drawioFilePrefix, len(r.files)-countNonDrawioFiles(r.files)+1)
 	r.files = append(r.files, PageFile{Name: name, Data: data})
