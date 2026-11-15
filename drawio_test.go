@@ -349,3 +349,31 @@ func TestDrawioSVGFile_LocalFileRefWarning(t *testing.T) {
 		})
 	}
 }
+
+// 表のセルの中の図は、図の名前の | をエスケープしない（\| にすると、拡大表示が読む図ファイルの名前にバックスラッシュが入る）。
+// PNG の表示に戻すときは Markdown のリンクなので \| にする
+func TestConvertADFPage_DrawioInTableCellPipe(t *testing.T) {
+	adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` +
+		`{"type":"tableCell","content":[` + drawioExtension("drawio", `{"diagramName":"a|b.drawio"}`) + `]},` +
+		`{"type":"tableCell","content":[{"type":"paragraph","content":[` + adfText("x|y") + `]}]}]}]}`)
+	lastLine := func(md string) string {
+		lines := strings.Split(md, "\n")
+		return lines[len(lines)-1]
+	}
+
+	res, err := convertADFPageWith(adf, adfOptions{drawioSVG: func(string) ([]byte, error) { return []byte("<svg/>"), nil }})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := `| {{< drawio src="confluence-drawio-1.svg" file="a|b.drawio" title="a|b.drawio" >}} | x\|y |`; lastLine(res.Markdown) != want {
+		t.Errorf("SVG: got %q, want %q", lastLine(res.Markdown), want)
+	}
+
+	res, err = convertADFPageWith(adf, adfOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := `| [![a\|b.drawio](a\|b.drawio.png)](a\|b.drawio) | x\|y |`; lastLine(res.Markdown) != want {
+		t.Errorf("PNG: got %q, want %q", lastLine(res.Markdown), want)
+	}
+}
