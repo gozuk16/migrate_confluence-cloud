@@ -98,6 +98,35 @@ func TestInlineSVG(t *testing.T) {
 	}
 }
 
+// TestCountLocalFileRefs は、SVG に残った file:// の参照を数えるテスト
+func TestCountLocalFileRefs(t *testing.T) {
+	tests := []struct {
+		name string
+		svg  string
+		want int
+	}{
+		{name: "参照が無い", svg: `<svg><rect/></svg>`, want: 0},
+		{name: "埋め込まれた画像と外部の画像は数えない",
+			svg: `<svg><image xlink:href="data:image/svg+xml;base64,AAAA"/><image xlink:href="https://example.com/a.png"/></svg>`, want: 0},
+		{name: "draw.io のアプリの中のアイコン",
+			svg: `<svg><image xlink:href="file:///Applications/draw.io.app/Contents/Resources/app.asar/drawio/src/main/webapp/img/lib/azure2/other/x.svg"/></svg>`, want: 1},
+		{name: "href でも大文字でも数える",
+			svg: `<svg><image href="FILE:///a.png"/><image xlink:href='file:///b.png'/></svg>`, want: 2},
+		{name: "図の中の文字に書かれた file:// は数えない", svg: `<svg><text>file:///etc/hosts</text></svg>`, want: 0},
+		{name: "img 要素の src も数える", svg: `<svg><foreignObject><img src="file:///a.png"/></foreignObject></svg>`, want: 1},
+		{name: "図形に付けたリンクは数えない", svg: `<svg><a xlink:href="file://server/share/doc.pdf"><rect/></a></svg>`, want: 0},
+		{name: "空白があっても数える", svg: `<svg><image xlink:href = " file:///a.png"/></svg>`, want: 1},
+		{name: "CSS の url() は数えない（draw.io が書き出さない形）", svg: `<svg><rect style="fill:url(file:///a.png)"/></svg>`, want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := countLocalFileRefs([]byte(tt.svg)); got != tt.want {
+				t.Errorf("countLocalFileRefs() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
 // fakeDrawioCLI は draw.io のコマンドの代わりになるシェルスクリプトを作る。
 // 受け取った引数を args.txt に残し、script の内容を実行する（$out が出力先、$in が入力）
 func fakeDrawioCLI(t *testing.T, script string) (cli, argsFile string) {
@@ -135,7 +164,7 @@ func TestDrawioCLI_ExportSVG(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"-x -f svg", "--svg-theme light", "--embed-svg-fonts false", "diagram.drawio"} {
+	for _, want := range []string{"-x -f svg", "--svg-theme light", "--embed-svg-fonts false", "--embed-svg-images", "diagram.drawio"} {
 		if !strings.Contains(string(args), want) {
 			t.Errorf("args = %q, want %q を含む", args, want)
 		}

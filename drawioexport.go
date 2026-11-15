@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -74,6 +75,11 @@ func findDrawioCLI(configured string, lookPath func(string) (string, error), def
 // ExportSVG は図ファイルの 1 ページ目を SVG に変換する。
 // 明るい配色に固定し（--svg-theme light。既定の auto は OS のダークモードで線と文字が白くなる）、
 // フォントは埋め込まない（--embed-svg-fonts false。文字をそのまま残し、外部のフォントも取りに行かない）。
+// 画像は SVG の中に埋め込む（--embed-svg-images）。付けないと、図形ライブラリのアイコン（Azure・AWS など）が
+// draw.io のアプリの中のファイル（file:///…/app.asar/…）を指したままになり、ブラウザで表示できない。
+// 外部 URL の画像も取得して埋め込むが、取得できなかったものは URL のまま残る。
+// 図の中に、接続しても応答の返らない URL の画像があると、draw.io が画像の読み込みを待ち続けて時間切れになる
+// （そのような画像を 1 件含む図で、実測 76 秒。このオプションを付けなくても同じで、以前からの制限）
 // 添付ファイルは拡張子が無いことや、コマンドの引数として扱いにくい名前のことがあるので、一時フォルダに写してから変換する
 func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 	tmpDir, err := os.MkdirTemp("", "drawio-export-")
@@ -90,7 +96,7 @@ func (c *DrawioCLI) ExportSVG(srcPath string) ([]byte, error) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.path, "-x", "-f", "svg", "--svg-theme", "light", "--embed-svg-fonts", "false", "-o", out, in)
+	cmd := exec.CommandContext(ctx, c.path, "-x", "-f", "svg", "--svg-theme", "light", "--embed-svg-fonts", "false", "--embed-svg-images", "-o", out, in)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	// draw.io は Electron で、打ち切ったあとも補助プロセスがエラー出力を握ったまま残ることがある。
@@ -128,6 +134,18 @@ func inlineSVG(data []byte) ([]byte, error) {
 		}
 	}
 	return svg, nil
+}
+
+// localFileRefPattern は、SVG の画像の要素（image・img）で、参照先（href・xlink:href・src）が file: で始まる箇所。
+// 警告を出すためのものなので、draw.io が書き出す形だけを拾う（CSS の url(…) や文字参照で書かれたものは拾わない）。
+// 図形に付けたリンク（<a href="file:…">）は、画像の表示に関係しないので拾わない
+var localFileRefPattern = regexp.MustCompile(`(?is)<(?:image|img)\b[^>]*?(?:href|src)\s*=\s*["']\s*file:`)
+
+// countLocalFileRefs は、SVG の中の、ローカルのファイル（file://）を指す画像の数を返す。
+// ブラウザはサイトのページから file:// を読めないので、残っていればその画像は表示されない
+// （draw.io に無い図形ライブラリの画像を指す図で起こる。--embed-svg-images を扱えない古い draw.io でも起こりうる）
+func countLocalFileRefs(svg []byte) int {
+	return len(localFileRefPattern.FindAll(svg, -1))
 }
 
 // copyFile は src を dst に写す

@@ -70,6 +70,7 @@ func (r *adfRenderer) renderDrawio(node ADFNode) string {
 
 // drawioSVGFile は図を SVG にして、本文と一緒に書き出すファイルに加え、そのファイル名を返す。
 // SVG にしない設定のとき（drawioSVG が nil）は何もせず空文字を返す。SVG にできなかったときは警告を記録して空文字を返す。
+// SVG に file:// の画像が残っているときは、警告を記録したうえで SVG を使う（その画像のほかは表示できるため）。
 // 同じ図をページ内で何度も埋め込んでいても、変換と警告は 1 回だけにして同じファイルを使う
 func (r *adfRenderer) drawioSVGFile(diagramName string) string {
 	if r.drawioSVG == nil {
@@ -86,6 +87,11 @@ func (r *adfRenderer) drawioSVGFile(diagramName string) string {
 		r.warnings = append(r.warnings, "draw.io: "+diagramName+" を SVG にできないため PNG で表示します: "+err.Error())
 		r.drawioFiles[diagramName] = ""
 		return ""
+	}
+	if n := countLocalFileRefs(data); n > 0 {
+		r.warnings = append(r.warnings, fmt.Sprintf(
+			"draw.io: %s の SVG に、ローカルのファイル（file://）を指す画像が %d 件残っています。その画像はブラウザでは表示されません"+
+				"（図が draw.io に無い図形ライブラリの画像を指しているか、draw.io デスクトップ版が古い可能性があります）", diagramName, n))
 	}
 	name := fmt.Sprintf("%s%d.svg", drawioFilePrefix, len(r.files)-countNonDrawioFiles(r.files)+1)
 	r.files = append(r.files, PageFile{Name: name, Data: data})

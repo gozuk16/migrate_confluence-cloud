@@ -316,3 +316,36 @@ func TestExcludeDrawioDrafts(t *testing.T) {
 		t.Errorf("got %#v, want 空のスライス（非 nil）", got)
 	}
 }
+
+// SVG に file:// の画像が残っていたら、警告を記録したうえで SVG は埋め込む
+func TestDrawioSVGFile_LocalFileRefWarning(t *testing.T) {
+	tests := []struct {
+		name     string
+		svg      string
+		wantWarn bool
+	}{
+		{name: "file:// の画像が残っている", svg: `<svg><image xlink:href="file:///Applications/draw.io.app/x.svg"/></svg>`, wantWarn: true},
+		{name: "画像が埋め込まれている", svg: `<svg><image xlink:href="data:image/svg+xml;base64,AAAA"/></svg>`, wantWarn: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &adfRenderer{drawioSVG: func(string) ([]byte, error) { return []byte(tt.svg), nil }}
+			// 同じ図を 2 回埋め込んでも、警告は 1 回だけ
+			for i := 0; i < 2; i++ {
+				if got := r.drawioSVGFile("図.drawio"); got != "confluence-drawio-1.svg" {
+					t.Errorf("drawioSVGFile() = %q, want confluence-drawio-1.svg", got)
+				}
+			}
+			if len(r.files) != 1 || string(r.files[0].Data) != tt.svg {
+				t.Errorf("SVG が書き出し予定に入っていません: %v", r.files)
+			}
+			if tt.wantWarn {
+				if len(r.warnings) != 1 || !strings.Contains(r.warnings[0], "図.drawio") || !strings.Contains(r.warnings[0], "file://") {
+					t.Errorf("警告が期待と異なります: %v", r.warnings)
+				}
+			} else if len(r.warnings) != 0 {
+				t.Errorf("警告が出ました: %v", r.warnings)
+			}
+		})
+	}
+}
