@@ -466,3 +466,25 @@ func TestConvertADFPage_DrawioPageNotFoundPNG(t *testing.T) {
 		t.Errorf("warnings = %q, want 2 件（無いページ、SVG にできない）", res.Warnings)
 	}
 }
+
+// 実際のマクロのパラメータ（2026-11-15 に Confluence Cloud で確認）。aspect は「<ページの ID> <レイヤーの ID>」で、aspectHash は無い
+func TestConvertADFPage_DrawioPageRealParams(t *testing.T) {
+	var asked string
+	opts := adfOptions{drawioSVG: func(name, pageID string) ([]byte, error) {
+		asked = name + "#" + pageID
+		return []byte("<svg/>"), nil
+	}}
+	guest := `{"diagramName":"multipage.drawio","aspect":"L4zVVx1Hhkx3Ez1uyK2Q 1","width":1560,"links":"auto","zoom":100,"tbstyle":"top",` +
+		`"pageId":"68747267","diagramDisplayName":"multipage.drawio","lbox":true,"revision":2,"height":1371}`
+	res, err := convertADFPageWith(adfDoc(drawioExtension("drawio", guest)), opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if want := `{{< drawio src="confluence-drawio-1.svg" file="multipage.drawio" page="L4zVVx1Hhkx3Ez1uyK2Q" title="multipage.drawio" >}}`; res.Markdown != want {
+		t.Errorf("got %q, want %q", res.Markdown, want)
+	}
+	// guestParams の pageId は Confluence のページの ID で、図のページの指定には使わない
+	if want := "multipage.drawio#L4zVVx1Hhkx3Ez1uyK2Q"; asked != want {
+		t.Errorf("SVG にした図 = %q, want %q", asked, want)
+	}
+}
