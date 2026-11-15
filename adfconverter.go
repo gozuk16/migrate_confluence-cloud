@@ -631,7 +631,54 @@ func (r *adfRenderer) renderCellContent(cell ADFNode) string {
 	joined := strings.Join(parts, "<br>")
 	// hardBreak 等が残した改行をすべて <br> に置換してから | をエスケープする
 	joined = strings.ReplaceAll(joined, "\n", "<br>")
-	return strings.ReplaceAll(joined, "|", "\\|")
+	return escapeCellPipes(joined)
+}
+
+// escapeCellPipes はセルの区切りと解釈されないよう、セルの内容の | を \| にする。
+// ショートコードの呼び出し（{{< … >}}）の中の | はそのまま残す。Hugo は Markdown を解釈する前に
+// ショートコードを取り出すので、中の | がセルを区切ることはなく、\| にするとバックスラッシュが引数の値に入る
+// （draw.io の図の名前に | があると、拡大表示が「a\|b.drawio」を読みに行く）。
+// 閉じていない {{< は本文の文字として扱い、| をエスケープする
+func escapeCellPipes(s string) string {
+	var sb strings.Builder
+	for {
+		start := strings.Index(s, "{{<")
+		if start < 0 {
+			break
+		}
+		end := shortcodeEnd(s, start)
+		if end < 0 {
+			break
+		}
+		sb.WriteString(strings.ReplaceAll(s[:start], "|", `\|`))
+		sb.WriteString(s[start:end])
+		s = s[end:]
+	}
+	sb.WriteString(strings.ReplaceAll(s, "|", `\|`))
+	return sb.String()
+}
+
+// shortcodeEnd は s[start:] で始まるショートコードの呼び出しの終わり（>}} の次の位置）を返す。閉じていなければ -1 を返す。
+// 引数の値（"…" と `…`。quoteShortcodeParam の出力）の中の >}} は終わりと見なさない
+func shortcodeEnd(s string, start int) int {
+	for i := start + len("{{<"); i < len(s); i++ {
+		switch s[i] {
+		case '"':
+			for i++; i < len(s) && s[i] != '"'; i++ {
+				if s[i] == '\\' {
+					i++
+				}
+			}
+		case '`':
+			for i++; i < len(s) && s[i] != '`'; i++ {
+			}
+		case '>':
+			if strings.HasPrefix(s[i:], ">}}") {
+				return i + len(">}}")
+			}
+		}
+	}
+	return -1
 }
 
 // renderCellBlock はセル内の1ブロック要素を改行なしの文字列に変換する

@@ -1288,3 +1288,63 @@ func TestConvertADF_LayoutColumnNoWidth(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// セルの中の添付画像は、代替テキスト・ファイル名の | を \| にする（Hugo は代替テキスト・リンク先の \| を | と解釈する）
+func TestConvertADF_TableCellMediaPipe(t *testing.T) {
+	media := `{"type":"media","attrs":{"type":"file","id":"u1","alt":"a|b"}}`
+	tests := []struct {
+		name string
+		cell string
+		want string
+	}{
+		{"mediaSingle", `{"type":"mediaSingle","content":[` + media + `]}`, `| ![a\|b](p\|q.png) | x |`},
+		{"mediaGroup", `{"type":"mediaGroup","content":[` + media + `]}`, `| ![a\|b](p\|q.png) | x |`},
+		{"mediaInline", `{"type":"paragraph","content":[{"type":"mediaInline","attrs":{"type":"file","id":"u1","alt":"a|b"}}]}`,
+			`| ![a\|b](p\|q.png) | x |`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			adf := adfDoc(`{"type":"table","content":[{"type":"tableRow","content":[` +
+				`{"type":"tableCell","content":[` + tt.cell + `]},` +
+				`{"type":"tableCell","content":[{"type":"paragraph","content":[` + adfText("x") + `]}]}]}]}`)
+			got, err := convertADF(adf, map[string]string{"u1": "p|q.png"})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			lines := strings.Split(got, "\n")
+			if last := lines[len(lines)-1]; last != tt.want {
+				t.Errorf("got %q, want %q", last, tt.want)
+			}
+		})
+	}
+}
+
+// ショートコードの呼び出しの中の | はエスケープしない（Hugo が Markdown より先に取り出すので、\| にすると引数の値にバックスラッシュが入る）
+func TestEscapeCellPipes(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"本文", `a|b`, `a\|b`},
+		{"ショートコードの中", `{{< drawio file="a|b" >}}`, `{{< drawio file="a|b" >}}`},
+		{"ショートコードの前後", `x|y {{< drawio file="a|b" >}} z|w`, `x\|y {{< drawio file="a|b" >}} z\|w`},
+		{"ショートコードが 2 つ", `{{< a p="1|2" >}}|{{< b p="3|4" >}}`, `{{< a p="1|2" >}}\|{{< b p="3|4" >}}`},
+		{"引数の値の中の >}}", `{{< a p="x >}} | \" | y" >}} | z`, `{{< a p="x >}} | \" | y" >}} \| z`},
+		{"バッククォートの引数の中の >}}（\\ はエスケープにならない）", "{{< a p=`x >}} | \\` >}} | z", "{{< a p=`x >}} | \\` >}} \\| z"},
+		{"引数なし", `{{< toc >}}|`, `{{< toc >}}\|`},
+		{"末尾が >}}", `a|{{< children depth="2" >}}`, `a\|{{< children depth="2" >}}`},
+		{"quoteShortcodeParam の出力", "x|" + `{{< page-properties-report label=` + quoteShortcodeParam(`a|b\c`) + ` title=` + quoteShortcodeParam(`"q"|r`) + ` >}}`,
+			"x\\|{{< page-properties-report label=`a|b\\c` title=\"\\\"q\\\"|r\" >}}"},
+		{"本文の閉じた {{<", `{{< a | b >}} | c`, `{{< a | b >}} \| c`},
+		{"閉じていない", `{{< a | b`, `{{< a \| b`},
+		{"引数の値が閉じていない", `{{< a p="x | y >}} | z`, `{{< a p="x \| y >}} \| z`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := escapeCellPipes(tt.in); got != tt.want {
+				t.Errorf("escapeCellPipes(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
