@@ -30,8 +30,12 @@ clean:
 	rm -f migConfluence coverage.out coverage.html debug.log
 
 # Hugo サイト: Confluence データ取得 → ビルド → Pagefind インデックス生成
+# 移行するスペースは設定ファイルの space_keys（無ければ default_space_key）で決まる。
+# SPACE_KEYS=A,B を渡すと --space-key として使う（例: make sync-and-build SPACE_KEYS='SCRUM,~<アカウント ID>'）。
+# 失敗したスペースがあると migConfluence が 0 以外で終わり、Hugo のビルドに進まない
+SPACE_KEYS ?=
 sync-and-build: build
-	./migConfluence space
+	./migConfluence space $(if $(SPACE_KEYS),--space-key '$(SPACE_KEYS)')
 	mkdir -p hugo-site/content
 	cp -r output/markdown/. hugo-site/content/
 	cd hugo-site && hugo --minify

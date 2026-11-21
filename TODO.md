@@ -11,6 +11,19 @@
 
 ## 完了
 
+- [x] 複数のスペースの移行と、トップページのスペース名の表示（ブランチ: feature/multi-space。テーマの変更は不要）
+  - 調査（2026-11-21）: ユーザースペース（`~5570…`、type=personal）が移行されないのは、ツールが `default_space_key`（SCRUM）の 1 スペースしか移行しないため。API ではスペースも 4 ページも読める。`--space-key` で渡せば変換でき、Hugo の URL も `/~5570…/` で生成される
+  - [x] 設定ファイルの `space_keys` と、`--space-key` の複数指定・カンマ区切り（優先順位: 引数 > space_keys > default_space_key。上位が空なら下位を使う）
+  - [x] space コマンドがスペースを順に処理する。失敗したスペースがあっても残りを続け、最後にまとめてエラー（終了コード 1）にする
+  - [x] Makefile の sync-and-build で `SPACE_KEYS` を渡せるようにする
+  - [x] スペースごとに `_index.md`（title = スペース名）を出力する。サンプルにも `_index.md`（title = "サンプル"）を置く
+  - [x] .gitignore で、サンプル以外のスペースのディレクトリ（ユーザースペースを含む）を管理対象から外す
+  - [x] テスト追加（config_test.go・mdwriter_test.go・main_test.go）、make test 成功、make lint 0 件
+  - [x] README・config.toml.example・CHANGELOG の更新
+  - [x] 両方のスペースを移行し直し、localhost:1313 で確認: トップページに「Kenichiro GOZU」「test-migration」「サンプル」が出る。ユーザースペースのセクションとページ（`/~5570…/概要/`）が開ける。SCRUM の出力の差分は `_index.md` の追加と、draw.io が毎回振り直すグラデーションの ID だけ。存在しないスペースを混ぜると、残りを移行して終了コード 1 になる（スクラッチの出力先で確認）
+  - [x] サブエージェントでコードレビューし、指摘を反映（高の指摘は無し。フラグの分解のテストを追加、外したスペースの出力が残ることを README に記載、警告の文言と Makefile の例を修正。1 つでも失敗したら Hugo のビルドに進まない動作は、一部だけ更新したサイトを公開しないため維持）
+  - [x] push して PR を作成
+
 - [x] draw.io の複数ページの図で、マクロが指定するページを埋め込む（親: feature/drawio-page、テーマ: feature/drawio-page）
   - 調査（2026-11-15）: 移行対象の draw.io マクロ 3 件はどれも 1 ページの図で、ページの指定は無い。draw.io の公開されているソース（Confluence 用ビューア、v13.9.9）では、マクロの `aspect` が「<ページの ID> <レイヤーの ID> …」で、ビューアの `pageId`・`layerIds` に渡している。現在のマクロのパラメータ名（diagramName・revision・lbox など）は当時と同じ
   - draw.io のコマンド（26.2.2）: `--page-index` は 0 始まりで、指定のページを SVG にできる。ページの数以上の番号はエラーにならず最後のページになる。`--layers` は SVG では働かない
