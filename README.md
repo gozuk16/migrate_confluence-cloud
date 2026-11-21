@@ -110,7 +110,10 @@ attachments_dir = ""
 intermediate_dir = "output/intermediate"
 
 [search]
-# デフォルトのスペースキー（space コマンドでスペースキーを省略した場合に使用）
+# space コマンドで移行するスペースキーのリスト。指定した順番に処理する
+# ユーザースペース（個人用スペース）のキーは「~」で始まる
+space_keys = ["MYSPACE", "~5570586eed56ba9b9b4a87ad7418b7086f1063"]
+# デフォルトのスペースキー（space_keys が空のときに使う。従来の設定との互換のため残している）
 default_space_key = ""
 
 [display]
@@ -136,7 +139,8 @@ cli_path = ""
 | `output` | `markdown_dir` | Markdown ファイルの出力先ディレクトリ |
 | `output` | `attachments_dir` | 添付ファイルの保存先（空の場合は Markdown と同じディレクトリ） |
 | `output` | `intermediate_dir` | 中間ファイルの保存先ディレクトリ |
-| `search` | `default_space_key` | `space` コマンドのデフォルトスペースキー |
+| `search` | `space_keys` | `space` コマンドで移行するスペースキーのリスト（指定した順番に処理する） |
+| `search` | `default_space_key` | `space_keys` が空のときに移行するスペースキー（従来の設定との互換のため残している） |
 | `display` | `ignored_macros` | 変換時に無視するマクロ名のリスト |
 | `drawio` | `cli_path` | draw.io デスクトップ版のコマンドのパス（空の場合は PATH の `drawio`・`draw.io` と既定のインストール先から探す） |
 | `deletedUsers` | `"accountId"` | 削除済みアカウントの表示名マッピング |
@@ -188,14 +192,36 @@ migConfluence page --page-id <ページID> [オプション]
 ### `space` コマンド — スペース内の全ページを一括取得
 
 ```bash
-migConfluence space [--space-key <スペースキー>] [オプション]
+migConfluence space [--space-key <スペースキー>]... [オプション]
 ```
 
 | フラグ | エイリアス | 説明 |
 |---|---|---|
-| `--space-key` | `-k` | 取得するスペースのキー（省略時は設定ファイルの `default_space_key` を使用） |
+| `--space-key` | `-k` | 取得するスペースのキー。複数回指定するか、カンマで区切ると、複数のスペースを指定した順番に処理する |
 | `--save-intermediate` | — | 中間ファイルを保存する |
 | `--download-attachments` | — | 添付ファイルをダウンロードする。保存済みのファイルは、Confluence 側で更新されたものだけ取り直す |
+
+**移行するスペースの決め方**
+
+移行するスペースは、次の順番で最初に見つかった指定を使います。上位の指定があれば、下位の指定は使いません（合わせることはしません）。
+
+1. 引数の `--space-key`
+2. 設定ファイルの `space_keys`
+3. 設定ファイルの `default_space_key`
+
+`default_space_key` だけを書いた従来の設定ファイルは、そのまま使えます。`space_keys` と `default_space_key` の両方があるときは `space_keys` を使い、`default_space_key` は使いません。スペースキーの前後の空白は取り除き、同じキーを 2 回以上指定しても 1 回だけ処理します。
+
+**スペースの移行に失敗したとき**
+
+あるスペースの取得に失敗しても（スペースが無い、権限が無いなど）、残りのスペースの移行を続けます。すべてのスペースを処理したあとで、失敗したスペースとその理由をまとめて表示し、コマンドは終了コード 1 で終わります。成功したスペースの出力は残ります。ページ単位の失敗は、これまでどおり警告を出して次のページに進みます（スペースの失敗には数えません）。
+
+**スペースのセクションのタイトル**
+
+スペースごとに `SPACE_KEY/_index.md` を出力し、`title` にスペース名を書きます。Hugo のトップページとサイドバーには、スペースキーではなくスペース名が表示されます。`_index.md` は移行のたびに上書きするので、Confluence でスペース名を変えると次の移行で反映されます。`convert` コマンドはスペース名を持たないため、`_index.md` を書き出しません。
+
+**移行対象から外したスペースの出力**
+
+`space_keys` や `--space-key` からスペースを外しても、そのスペースの出力（`markdown_dir` の下のスペースキーのディレクトリ）は消えずに残り、Hugo のサイトにも載り続けます。サイトから外すには、そのディレクトリを手動で削除してください。サンプル以外のスペースのディレクトリは git の管理対象から外しているので、`git status` には現れません。
 
 **使用例**
 
@@ -203,7 +229,11 @@ migConfluence space [--space-key <スペースキー>] [オプション]
 # スペース内の全ページを変換
 ./migConfluence space --space-key MYSPACE
 
-# 設定ファイルの default_space_key を使用
+# 複数のスペースを変換（次の 2 つは同じ）
+./migConfluence space --space-key MYSPACE --space-key '~5570586eed56ba9b9b4a87ad7418b7086f1063'
+./migConfluence space --space-key 'MYSPACE,~5570586eed56ba9b9b4a87ad7418b7086f1063'
+
+# 設定ファイルの space_keys（無ければ default_space_key）を使用
 ./migConfluence space
 
 # 中間ファイル保存と添付ファイルダウンロードを同時に実行
@@ -250,7 +280,8 @@ LOG_LEVEL=DEBUG ./migConfluence page --page-id 123456789
 
 ```
 output/markdown/
-└── SPACE_KEY/
+└── SPACE_KEY/              # ユーザースペースは ~<アカウント ID> のまま（URL も /~<アカウント ID>/）
+    ├── _index.md           # スペースのセクション（title = スペース名）
     └── PAGE_TITLE/
         ├── index.md        # 変換された Markdown ファイル
         └── image.png       # ダウンロードされた添付ファイル（任意）
@@ -278,7 +309,7 @@ output/intermediate/
 | `make coverage` | テストカバレッジを計測し `coverage.html` を生成 |
 | `make lint` | `golangci-lint` でリントを実行 |
 | `make clean` | ビルド成果物・ログファイルを削除 |
-| `make sync-and-build` | Confluence 同期 → Hugo ビルド → Pagefind インデックス生成 |
+| `make sync-and-build` | Confluence 同期 → Hugo ビルド → Pagefind インデックス生成。移行するスペースは設定ファイルの `space_keys`（無ければ `default_space_key`）で決まる。`make sync-and-build SPACE_KEYS=A,B` で引数として渡すこともできる。失敗したスペースがあると、Hugo のビルドに進まずに止まる |
 | `make hugo-serve` | Hugo 開発サーバーを起動（ローカル確認用） |
 
 ## ライセンス

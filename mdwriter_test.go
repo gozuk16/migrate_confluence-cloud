@@ -1049,3 +1049,59 @@ func TestMDWriter_DrawioSVGFuncPage(t *testing.T) {
 		t.Errorf("無いページ: err = %v, want errDrawioPageNotFound", err)
 	}
 }
+
+// TestMDWriter_WriteSpaceIndex はスペースのセクションの _index.md の出力のテスト
+func TestMDWriter_WriteSpaceIndex(t *testing.T) {
+	tests := []struct {
+		name       string
+		spaceKey   string
+		spaceTitle string
+		wantTitle  string
+	}{
+		{name: "スペース名をタイトルにする", spaceKey: "SCRUM", spaceTitle: "test-migration", wantTitle: `title = "test-migration"`},
+		{name: "ユーザースペースのキーをそのままディレクトリにする", spaceKey: "~5570abc", spaceTitle: "Kenichiro GOZU", wantTitle: `title = "Kenichiro GOZU"`},
+		{name: "スペース名が空ならキーをタイトルにする", spaceKey: "SCRUM", spaceTitle: "", wantTitle: `title = "SCRUM"`},
+		{name: "引用符を含むスペース名をエスケープする", spaceKey: "Q", spaceTitle: `a "b" \c`, wantTitle: `title = "a \"b\" \\c"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			w := newTestMDWriter(dir)
+			if err := w.WriteSpaceIndex(tt.spaceKey, tt.spaceTitle); err != nil {
+				t.Fatalf("WriteSpaceIndex() error = %v", err)
+			}
+			data, err := os.ReadFile(filepath.Join(dir, tt.spaceKey, "_index.md"))
+			if err != nil {
+				t.Fatalf("_index.md が出力されていない: %v", err)
+			}
+			got := string(data)
+			for _, want := range []string{"+++\n", tt.wantTitle + "\n", fmt.Sprintf("space = %q\n", tt.spaceKey)} {
+				if !strings.Contains(got, want) {
+					t.Errorf("_index.md に %q が無い:\n%s", want, got)
+				}
+			}
+			if !strings.HasPrefix(got, "+++\n") || !strings.HasSuffix(got, "+++\n") {
+				t.Errorf("フロントマターだけのファイルになっていない:\n%s", got)
+			}
+		})
+	}
+}
+
+// TestMDWriter_WriteSpaceIndex_Overwrite は再移行でスペース名の変更を反映することのテスト
+func TestMDWriter_WriteSpaceIndex_Overwrite(t *testing.T) {
+	dir := t.TempDir()
+	w := newTestMDWriter(dir)
+	if err := w.WriteSpaceIndex("SCRUM", "旧名"); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.WriteSpaceIndex("SCRUM", "新名"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "SCRUM", "_index.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `title = "新名"`) || strings.Contains(string(data), "旧名") {
+		t.Errorf("スペース名の変更が反映されていない:\n%s", data)
+	}
+}

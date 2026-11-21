@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 )
@@ -92,13 +93,9 @@ func main() {
 			{
 				Name:    "space",
 				Aliases: []string{"s"},
-				Usage:   "スペース内の全ページを取得してMarkdownに変換する",
+				Usage:   "スペース内の全ページを取得してMarkdownに変換する（複数のスペースを順に処理できる）",
 				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:    "space-key",
-						Aliases: []string{"k"},
-						Usage:   "スペースキー（省略時は設定ファイルのdefault_space_keyを使用）",
-					},
+					spaceKeysFlag(),
 					&cli.BoolFlag{
 						Name:  "save-intermediate",
 						Value: true,
@@ -275,20 +272,25 @@ func processPage(client *ConfluenceClient, writer *MDWriter, intermediateSaver *
 	return nil
 }
 
-// fetchSpace はスペース内の全ページを取得するコマンドハンドラ
+// spaceKeysFlag は space コマンドの --space-key フラグを返す。
+// 複数回の指定とカンマ区切り（urfave/cli のスライスフラグの既定の区切り文字）で、複数のスペースを受け取る
+func spaceKeysFlag() *cli.StringSliceFlag {
+	return &cli.StringSliceFlag{
+		Name:    "space-key",
+		Aliases: []string{"k"},
+		Usage:   "スペースキー（複数回の指定とカンマ区切りが可能。省略時は設定ファイルの space_keys、それも無ければ default_space_key を使用）",
+	}
+}
+
+// fetchSpace は指定されたスペースの全ページを取得するコマンドハンドラ。
+// スペースは引数・設定ファイルの順に決め（ResolveSpaceKeys）、指定の順番に処理する
 func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	cfg, err := LoadConfig(cmd.Root().String("config"))
 	if err != nil {
 		return fmt.Errorf("設定ファイルの読み込みに失敗しました: %w", err)
 	}
 
-	spaceKey := cmd.String("space-key")
-	if spaceKey == "" {
-		spaceKey = cfg.Search.DefaultSpaceKey
-	}
-	if spaceKey == "" {
-		return fmt.Errorf("スペースキーを指定してください（--space-key または設定ファイルのdefault_space_key）")
-	}
+	spaceKeys := ResolveSpaceKeys(cmd.StringSlice("space-key"), cfg.Search)
 
 	saveIntermediate := cmd.Bool("save-intermediate")
 	downloadAttachments := cmd.Bool("download-attachments")
@@ -310,6 +312,49 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 		downloader = NewDownloader(cfg.Confluence.Email, cfg.Confluence.APIToken)
 	}
 
+	migrateErr := migrateSpaces(spaceKeys, func(spaceKey string) error {
+		return migrateSpace(client, writer, intermediateSaver, downloader, cfg, spaceKey)
+	})
+
+	// 未対応要素レポートの出力（全スペース分をまとめて 1 つにする。失敗したスペースがあっても出力する）
+	if len(spaceKeys) > 0 {
+		reportPath := filepath.Join(cfg.Output.MarkdownDir, "unsupported_elements.md")
+		if writeErr := conv.WriteUnsupportedReport(reportPath); writeErr != nil {
+			slog.Warn("未対応要素レポート出力エラー", "error", writeErr)
+		}
+	}
+
+	return migrateErr
+}
+
+// migrateSpaces はスペースを指定の順番に migrate で処理する。
+// 1 つのスペースで失敗しても残りのスペースを続け、最後に失敗したスペースをまとめてエラーで返す
+// （コマンドは 0 以外で終わる）。成功したスペースの出力はそのまま残る。
+func migrateSpaces(spaceKeys []string, migrate func(spaceKey string) error) error {
+	if len(spaceKeys) == 0 {
+		return fmt.Errorf("スペースキーを指定してください（--space-key、または設定ファイルの space_keys・default_space_key）")
+	}
+
+	var failed []string
+	for i, key := range spaceKeys {
+		if len(spaceKeys) > 1 {
+			fmt.Printf("=== スペース [%d/%d]: %s\n", i+1, len(spaceKeys), key)
+		}
+		if err := migrate(key); err != nil {
+			slog.Error("スペースの移行に失敗しました（残りのスペースは続けます）", "spaceKey", key, "error", err)
+			failed = append(failed, fmt.Sprintf("%s: %v", key, err))
+		}
+	}
+
+	if len(failed) > 0 {
+		return fmt.Errorf("%d/%d スペースの移行に失敗しました: %s", len(failed), len(spaceKeys), strings.Join(failed, "; "))
+	}
+	return nil
+}
+
+// migrateSpace は 1 つのスペースの全ページとフォルダを取得して出力する。
+// ページ単位の失敗は警告にして続け、スペース自体やページ一覧を取得できないときはエラーを返す
+func migrateSpace(client *ConfluenceClient, writer *MDWriter, intermediateSaver *IntermediateSaver, downloader *Downloader, cfg *Config, spaceKey string) error {
 	// スペース情報取得
 	space, err := client.GetSpaceByKey(spaceKey)
 	if err != nil {
@@ -325,6 +370,11 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Printf("スペース %s (%s): %d ページ\n", space.Name, space.Key, len(pages))
+
+	// トップページとサイドバーにスペース名を出すため、セクションの _index.md を書き出す
+	if err := writer.WriteSpaceIndex(space.Key, space.Name); err != nil {
+		slog.Warn("スペースの _index.md 出力エラー（トップページとサイドバーには、スペース名ではなくスペースキーを複数形にした名前が出る）", "spaceKey", space.Key, "error", err)
+	}
 
 	// 各ページを処理
 	for i, page := range pages {
@@ -345,14 +395,7 @@ func fetchSpace(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	fmt.Printf("完了: %d ページを変換しました\n", len(pages))
-
-	// 未対応要素レポートの出力
-	reportPath := filepath.Join(cfg.Output.MarkdownDir, "unsupported_elements.md")
-	if writeErr := conv.WriteUnsupportedReport(reportPath); writeErr != nil {
-		slog.Warn("未対応要素レポート出力エラー", "error", writeErr)
-	}
-
+	fmt.Printf("完了: %s (%s) の %d ページを変換しました\n", space.Name, space.Key, len(pages))
 	return nil
 }
 

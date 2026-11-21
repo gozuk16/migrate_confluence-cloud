@@ -15,7 +15,11 @@ attachments_dir = ""
 intermediate_dir = "output/intermediate"
 
 [search]
-# デフォルトのスペースキー（spaceコマンドでスペースキーを省略した場合に使用）
+# space コマンドで移行するスペースキーのリスト。指定した順番に処理する
+# ユーザースペース（個人用スペース）のキーは「~」で始まる（例: "~5570586eed56ba9b9b4a87ad7418b7086f1063"）
+# 空の場合は default_space_key を使う。--space-key を指定したときは、どちらも使わない
+space_keys = []
+# デフォルトのスペースキー（space_keys が空のときに使う。従来の設定との互換のため残している）
 default_space_key = ""
 
 [display]

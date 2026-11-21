@@ -128,6 +128,35 @@ func (w *MDWriter) WritePage(page *Page, spaceKey, spaceTitle, parentTitle strin
 	return nil
 }
 
+// WriteSpaceIndex はスペースのセクションの _index.md（outputDir/SPACE_KEY/_index.md）を書き出す。
+// Hugo はセクションのタイトルを _index.md の title から取る。_index.md が無いとディレクトリ名
+// （スペースキー）を複数形にしたもの（例: "SCRUMs"）になるため、スペース名を title にする。
+// スペース名が空ならスペースキーを使う。再移行のたびに上書きし、スペース名の変更を反映する。
+func (w *MDWriter) WriteSpaceIndex(spaceKey, spaceTitle string) error {
+	spaceDir := filepath.Join(w.outputDir, spaceKey)
+	if err := os.MkdirAll(spaceDir, 0755); err != nil {
+		return fmt.Errorf("スペースのディレクトリの作成に失敗しました: %w", err)
+	}
+	title := spaceTitle
+	if title == "" {
+		title = spaceKey
+	}
+
+	var sb strings.Builder
+	sb.WriteString("+++\n")
+	fmt.Fprintf(&sb, "title = %q\n", title)
+	fmt.Fprintf(&sb, "space = %q\n", spaceKey)
+	if spaceTitle != "" {
+		fmt.Fprintf(&sb, "space_title = %q\n", spaceTitle)
+	}
+	sb.WriteString("+++\n")
+
+	if err := os.WriteFile(filepath.Join(spaceDir, "_index.md"), []byte(sb.String()), 0644); err != nil {
+		return fmt.Errorf("スペースの _index.md の書き出しエラー: %w", err)
+	}
+	return nil
+}
+
 // WriteFolder はConfluenceのフォルダを「レンダリングされないページ」スタブとして書き出す。
 // Hugoの build.render = "never" によりURLもHTMLも生成されないが、
 // list = "always" によりテンプレートのページ一覧には現れるため、サイドバーのツリーに使える。

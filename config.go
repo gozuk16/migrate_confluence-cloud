@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -33,7 +34,8 @@ type OutputConfig struct {
 
 // SearchConfig は検索設定を表す構造体
 type SearchConfig struct {
-	DefaultSpaceKey string `toml:"default_space_key"` // デフォルトのスペースキー
+	DefaultSpaceKey string   `toml:"default_space_key"` // デフォルトのスペースキー（space_keys が無いときに使う。後方互換のため残す）
+	SpaceKeys       []string `toml:"space_keys"`        // space コマンドで移行するスペースキーのリスト（default_space_key より優先する）
 }
 
 // DisplayConfig は表示設定を表す構造体
@@ -89,4 +91,34 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// ResolveSpaceKeys は space コマンドで移行するスペースキーを決める。
+// 優先順位は、引数（--space-key）> 設定ファイルの space_keys > default_space_key。
+// 上位の指定が空（空白だけの要素を含む）なら、次の指定を使う。
+// 各要素はカンマで区切って空白を取り除き、空の要素と重複を除く（最初に現れた順番を保つ）。
+func ResolveSpaceKeys(cliKeys []string, search SearchConfig) []string {
+	for _, keys := range [][]string{cliKeys, search.SpaceKeys, {search.DefaultSpaceKey}} {
+		if normalized := normalizeSpaceKeys(keys); len(normalized) > 0 {
+			return normalized
+		}
+	}
+	return nil
+}
+
+// normalizeSpaceKeys はスペースキーのリストを、カンマで区切り、空白・空の要素・重複を除いた形にする
+func normalizeSpaceKeys(keys []string) []string {
+	var result []string
+	seen := map[string]bool{}
+	for _, k := range keys {
+		for _, part := range strings.Split(k, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" || seen[part] {
+				continue
+			}
+			seen[part] = true
+			result = append(result, part)
+		}
+	}
+	return result
 }
